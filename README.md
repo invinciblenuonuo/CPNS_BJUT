@@ -1,6 +1,6 @@
 # CPNS_BJUT
 
-#START 
+# START 
 首先创建一个名为“qcar”的conda环境，python=3.6.9
 ```python
 conda create -n qcar python=3.6.9
