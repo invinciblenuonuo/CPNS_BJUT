@@ -96,13 +96,14 @@ def control_task(qcar,control,lock):
             break
         time.sleep(0.01)
 
-def monitor_temp(qcar,lock):
+def monitor_temp(car,qcar,lock):
     global get_state_stopk
     while True:
-        print("acc=",qcar.accelerometer,
-        "v=",qcar.batteryVoltage,
-        "gyro=",qcar.gyroscope,
-        "current=",qcar.motorCurrent)
+        # print("acc=",car.accelerometer,
+        # "v=",car.batteryVoltage,
+        # "gyro=",car.gyroscope,
+        # "current=",car.motorCurrent)
+        print(qcar.get_world_transform())
         if get_state_stop:
             break
         time.sleep(0.1)
@@ -146,7 +147,7 @@ def main():
     t1 = Thread(target=control_task,args=(car,qcar0,lock))
     t1.start()
 
-    thread_monitor=Thread(target=monitor_temp,args=(car,lock))
+    thread_monitor=Thread(target=monitor_temp,args=(car,qcar,lock))
     thread_monitor.start()
 
     time.sleep(1)
