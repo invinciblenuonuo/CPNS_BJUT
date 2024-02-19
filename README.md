@@ -11,4 +11,4 @@ pip install requirement.txt
 ```
 之后开启qlab客户端
 
-运行'start.bat'
+运行`start.bat` 
