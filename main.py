@@ -87,6 +87,7 @@ def map_process():
     print("load succcessful")
     tx, ty, tyaw, tc, csp = FrenetPathMethod.generate_target_course(process_x,process_y)
     f.close
+    
     return tx, ty, tyaw, tc, csp
 
 #地图展示
@@ -142,20 +143,20 @@ def find_proper_point(xc,yc,xlist,ylist,csp):
     d_last = 10000
     proper_index = 0
 
-    i = last_point
-    for i in range(len(xlist)):
+    for i in range(last_point,len(xlist)):
         d = sqrt ( (xc - xlist[i])**2 + (yc - ylist[i])**2 )
         if d_last < d:
-            proper_index = i
-            last_point = i
-            print(i)
+            proper_index = i-1
+            last_point = i-1
             break
         d_last = d
+
     proper_theta = csp.calc_yaw(proper_index*0.05)
     proper_x = xlist[proper_index]
     proper_y = ylist[proper_index]
     proper_kappa  = csp.calc_curvature(proper_index*0.05)
-
+    #print('xlist=',xlist[proper_index],'ylist=', ylist[proper_index])
+    print(proper_index)
     return proper_s,proper_x,proper_y,proper_theta,proper_kappa
 
 
@@ -199,7 +200,7 @@ def path_planning_task(qcar_state,path_queue,lock):
     print("planning task start!")
     while True:
         proper_s,proper_x,proper_y,proper_theta,proper_kappa=find_proper_point(location[0], location[1], tx, ty , csp)
-        print('x=',proper_x,'y=',proper_y)
+        #print('x=',location[0],'y=', location[1])
         lock.acquire()
         lock.release()
 
