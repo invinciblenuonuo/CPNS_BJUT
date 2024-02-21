@@ -47,7 +47,7 @@ MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
 MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
 MAX_CURVATURE = 100.0  # maximum curvature [1/m]
 MAX_ROAD_WIDTH = 0.05 # maximum road width [m]
-D_ROAD_W = 0.001  # road width sampling length [m]
+D_ROAD_W = 0.005  # road width sampling length [m]
 DT = 0.2  # time tick [s] 
 MAX_T = 5.0  # max prediction time [m]
 MIN_T = 4.0  # min prediction time [m]
@@ -261,7 +261,7 @@ class FrenetPathMethod:
 
     def generate_target_course(x, y):
         #用四次样条曲线插值全局路径
-        #csp 好像是frenet坐标系下s的数组，还包括sxsy但不知道作用
+        #csp 是一个映射
         csp = cubic_spline_planner.CubicSpline2D(x, y)
         s = np.arange(0, csp.s[-1], 0.05)
         

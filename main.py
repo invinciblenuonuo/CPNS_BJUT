@@ -22,6 +22,7 @@ from queue import Queue
 import time
 from time import sleep, ctime
 import keyboard
+from math import *
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,11 +33,15 @@ from PathPlanning.FrenetOptimalPathPlanning import FrenetPathMethod
 #qcar控制量
 qcar0=[0,0,False,False,False,False,False] 
 #全局车速
-global_car_speed=0.01
+global_car_speed=0.1
+#qcar状态变量
+location=[0,0,0]
+rotation=[0,0,0]
 #信号量
 map_sig=False  #地图保存标识
 car_stop=False #停车标识
 get_state_stop=False#结束状态标志位
+
 
 
 
@@ -92,28 +97,6 @@ def map_show(path):
     plt.show()
     
 
-
-#控制函数
-def control_task(pal_car,qvl_car,control,carLocation_queue,carrotation_queue,path_queue,lock):
-    global get_state_stopk
-    global map_sig
-    print("control task start!")
-    while True:
-        lock.acquire()
-        pal_car.read_write_std(control[0],control[1],control[2])
-        statue, location, rotation, scale = qvl_car.get_world_transform()
-        #把位姿信息放入消息队列
-        carLocation_queue.put(location)
-        carrotation_queue.put(rotation)
-        #获取规划好的路径
-        path = path_queue.get()
-        #print(path.x)
-        lock.release()
-        if get_state_stop:
-            break
-        time.sleep(0.01)
-
-
 #建图任务（一般不用）
 def mapping_task(qcar , lock):
     global map_sig
@@ -147,17 +130,80 @@ def monitor_temp(car,qcar,lock):
         time.sleep(0.1)
 
 
+last_point=0
+#寻找匹配点
+def find_proper_point(xc,yc,xlist,ylist,csp):
+    global last_point
+    proper_s = 0
+    proper_x = 0
+    proper_y = 0
+    proper_theta = 0
+    proper_kappa = 0
+    d_last = 10000
+    proper_index = 0
+
+    i = last_point
+    for i in range(len(xlist)):
+        d = sqrt ( (xc - xlist[i])**2 + (yc - ylist[i])**2 )
+        if d_last < d:
+            proper_index = i
+            last_point = i
+            print(i)
+            break
+        d_last = d
+    proper_theta = csp.calc_yaw(proper_index*0.05)
+    proper_x = xlist[proper_index]
+    proper_y = ylist[proper_index]
+    proper_kappa  = csp.calc_curvature(proper_index*0.05)
+
+    return proper_s,proper_x,proper_y,proper_theta,proper_kappa
+
+
+
+#笛卡尔坐标系转frenet坐标系
+# rs,rx,ry,rtheta,rkappa 为参考点的参数
+# x,y,v,theta            为当前车的参数
+def cartesian_to_frenet2D(rs, rx, ry, rtheta, rkappa, x, y, v, theta):
+    s_condition = np.zeros(2)
+    d_condition = np.zeros(2)
+    
+    dx = x - rx
+    dy = y - ry
+    
+    cos_theta_r = cos(rtheta)
+    sin_theta_r = sin(rtheta)
+    
+    cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
+    d_condition[0] = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
+    
+    delta_theta = theta - rtheta
+    tan_delta_theta = tan(delta_theta)
+    cos_delta_theta = cos(delta_theta)
+    
+    one_minus_kappa_r_d = 1 - rkappa * d_condition[0]
+    d_condition[1] = one_minus_kappa_r_d * tan_delta_theta
+    
+    
+    s_condition[0] = rs
+    s_condition[1] = v * cos_delta_theta / one_minus_kappa_r_d
+
+    return s_condition, d_condition
+
+
 #路径规划函数
-def path_planning_task(qcar_state,carstate_queue,carrotation_queue,path_queue,lock):
+def path_planning_task(qcar_state,path_queue,lock):
     tx, ty, tyaw, tc, csp = map_process()
     PathMethod = FrenetPathMethod()
+    global location
+    global rotation
     print("planning task start!")
     while True:
-        location=carstate_queue.get()
-        rotation=carrotation_queue.get()
-        # print('location:',location,'rotation:',rotation)
+        proper_s,proper_x,proper_y,proper_theta,proper_kappa=find_proper_point(location[0], location[1], tx, ty , csp)
+        print('x=',proper_x,'y=',proper_y)
+        lock.acquire()
+        lock.release()
 
-        #输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
+        # 输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
         path = PathMethod.frenet_optimal_planning(
         csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
         qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
@@ -167,6 +213,29 @@ def path_planning_task(qcar_state,carstate_queue,carrotation_queue,path_queue,lo
             break
         time.sleep(0.1)
 
+
+#控制函数
+def control_task(pal_car,qvl_car,control,path_queue,lock):
+    global get_state_stopk
+    global map_sig
+    global location
+    global rotation
+    count=0
+    print("control task start!")
+    while True:
+        pal_car.read_write_std(control[0],control[1],control[2])
+
+        lock.acquire()
+        statue, location, rotation, scale = qvl_car.get_world_transform()
+        lock.release()
+
+        #从队列中获取规划好的路径
+        if not path_queue.empty():
+            path = path_queue.get_nowait()           
+        #print(path.x)        
+        if get_state_stop:
+            break
+        time.sleep(0.01)
 
 
 class path_state:
@@ -220,14 +289,12 @@ def main():
     qcar_path_state=path_state()
 
     #使用FIFO队列进行线程之间的通信
-    path_queue = Queue(maxsize=1000)
-    carstate_queue = Queue(maxsize=1000)
-    carrotation_queue = Queue(maxsize=1000)
+    path_queue = Queue(maxsize=10)
 
-    thread_control = Thread(target=control_task,args=(car,qcar,qcar0,carstate_queue,carrotation_queue,path_queue,lock))
+    thread_control = Thread(target=control_task,args=(car,qcar,qcar0,path_queue,lock))
     thread_control.start()
 
-    thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,carstate_queue,carrotation_queue,path_queue,lock))
+    thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,path_queue,lock))
     thread_path_planning.start()
 
     # thread_monitor=Thread(target=monitor_temp,args=(car,qcar,lock))
@@ -235,9 +302,10 @@ def main():
 
     # thread_mapping = Thread(target=mapping_task,args=(qcar,lock))
     # thread_mapping.start()
-    time.sleep(1)
-    map_show(path_queue.get())
+    
+    #map_show(path_queue.get())
     keyboard.hook(callback)
+    time.sleep(1)
 
     # 必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")
