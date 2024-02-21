@@ -18,6 +18,7 @@ import cv2
 import os
 from threading import Thread
 from threading import Lock
+from queue import Queue
 import time
 from time import sleep, ctime
 import keyboard
@@ -84,24 +85,34 @@ def map_process():
     return tx, ty, tyaw, tc, csp
 
 #地图展示
-def map_show():
+def map_show(path):
     tx, ty, tyaw, tc, csp=map_process()
     plt.scatter(tx,ty,marker='.', color='coral')
+    plt.scatter(path.x,path.y,marker='.',color='red')
     plt.show()
+    
 
 
 #控制函数
-def control_task(qcar,control,lock):
+def control_task(pal_car,qvl_car,control,carLocation_queue,carrotation_queue,path_queue,lock):
     global get_state_stopk
     global map_sig
     print("control task start!")
     while True:
         lock.acquire()
-        qcar.read_write_std(control[0],control[1],control[2])
+        pal_car.read_write_std(control[0],control[1],control[2])
+        statue, location, rotation, scale = qvl_car.get_world_transform()
+        #把位姿信息放入消息队列
+        carLocation_queue.put(location)
+        carrotation_queue.put(rotation)
+        #获取规划好的路径
+        path = path_queue.get()
+        #print(path.x)
         lock.release()
         if get_state_stop:
             break
         time.sleep(0.01)
+
 
 #建图任务（一般不用）
 def mapping_task(qcar , lock):
@@ -109,7 +120,7 @@ def mapping_task(qcar , lock):
     while True:
         if map_sig:
             lock.acquire()
-            statue, location, rotation, scale = qcar.get_world_transform()
+            statue,location, rotation, scale = qcar.get_world_transform()
             lock.release()
             with open("./data/globalmap.txt", 'a') as f:
                 f.write(str(location[0])+','+str(location[1])+'\n')
@@ -123,6 +134,8 @@ def mapping_task(qcar , lock):
 #车辆状态监控任务
 def monitor_temp(car,qcar,lock):
     global get_state_stopk
+    print("monitor task start!")
+
     while True:
         # print("acc=",car.accelerometer,
         # "v=",car.batteryVoltage,
@@ -135,14 +148,20 @@ def monitor_temp(car,qcar,lock):
 
 
 #路径规划函数
-def path_planning_task(qcar_state,lock):
+def path_planning_task(qcar_state,carstate_queue,carrotation_queue,path_queue,lock):
     tx, ty, tyaw, tc, csp = map_process()
     PathMethod = FrenetPathMethod()
+    print("planning task start!")
     while True:
+        location=carstate_queue.get()
+        rotation=carrotation_queue.get()
+        # print('location:',location,'rotation:',rotation)
+
         #输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
         path = PathMethod.frenet_optimal_planning(
         csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
         qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
+        path_queue.put(path)
         #print('path=',path)
         if get_state_stop:
             break
@@ -159,13 +178,12 @@ class path_state:
                 [50.0, 3.0]
                 ])
 
-        # initial state
-        self.c_speed =0  # current speed [m/s]
-        self.c_accel = 0.0  # current acceleration [m/ss]
-        self.c_d = 0.0  # current lateral position [m]
-        self.c_d_d = 0.0  # current lateral speed [m/s]
-        self.c_d_dd = 0.0  # current lateral acceleration [m/s]
-        self.s0 = 0.0  # current course position
+        self.c_speed =0  
+        self.c_accel = 0.0  
+        self.c_d = 0.2 
+        self.c_d_d = 0.0  
+        self.c_d_dd = 0.0  
+        self.s0 = 0.0  
 
 
 def main():
@@ -201,10 +219,15 @@ def main():
     #定义qcar路径规划所需的状态信息
     qcar_path_state=path_state()
 
-    thread_control = Thread(target=control_task,args=(car,qcar0,lock))
+    #使用FIFO队列进行线程之间的通信
+    path_queue = Queue(maxsize=1000)
+    carstate_queue = Queue(maxsize=1000)
+    carrotation_queue = Queue(maxsize=1000)
+
+    thread_control = Thread(target=control_task,args=(car,qcar,qcar0,carstate_queue,carrotation_queue,path_queue,lock))
     thread_control.start()
 
-    thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,lock))
+    thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,carstate_queue,carrotation_queue,path_queue,lock))
     thread_path_planning.start()
 
     # thread_monitor=Thread(target=monitor_temp,args=(car,qcar,lock))
@@ -212,9 +235,8 @@ def main():
 
     # thread_mapping = Thread(target=mapping_task,args=(qcar,lock))
     # thread_mapping.start()
-   
-    #map_show()
     time.sleep(1)
+    map_show(path_queue.get())
     keyboard.hook(callback)
 
     # 必须用以下方式停止，否则会出现严重bug

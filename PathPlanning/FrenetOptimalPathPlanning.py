@@ -29,24 +29,38 @@ from PathPlanning.CubicSpline import cubic_spline_planner
 
 
 # Parameter
+# MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
+# MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
+# MAX_CURVATURE = 10.0  # maximum curvature [1/m]
+# MAX_ROAD_WIDTH = 7.0  # maximum road width [m]
+# D_ROAD_W = 1.0  # road width sampling length [m]
+# DT = 0.02  # time tick [s] 
+# MAX_T = 5.0  # max prediction time [m]
+# MIN_T = 4.0  # min prediction time [m]
+# TARGET_SPEED = 30.0 / 3.6  # target speed [m/s]
+# D_T_S = 5.0 / 3.6  # target speed sampling length [m/s]
+# N_S_SAMPLE = 1  # sampling number of target speed
+# ROBOT_RADIUS = 2.0  # robot radius [m]
+
+# Parameter
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
 MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
-MAX_CURVATURE = 10.0  # maximum curvature [1/m]
-MAX_ROAD_WIDTH = 7.0  # maximum road width [m]
-D_ROAD_W = 1.0  # road width sampling length [m]
+MAX_CURVATURE = 100.0  # maximum curvature [1/m]
+MAX_ROAD_WIDTH = 0.05 # maximum road width [m]
+D_ROAD_W = 0.001  # road width sampling length [m]
 DT = 0.2  # time tick [s] 
 MAX_T = 5.0  # max prediction time [m]
 MIN_T = 4.0  # min prediction time [m]
-TARGET_SPEED = 30.0 / 3.6  # target speed [m/s]
-D_T_S = 5.0 / 3.6  # target speed sampling length [m/s]
+TARGET_SPEED = 3.0 / 3.6  # target speed [m/s]
+D_T_S = 0.5 / 3.6  # target speed sampling length [m/s]
 N_S_SAMPLE = 1  # sampling number of target speed
-ROBOT_RADIUS = 2.0  # robot radius [m]
+ROBOT_RADIUS = 0.02  # robot radius [m]
 
 # cost weights
 K_J = 0.1
 K_T = 0.1
 K_D = 1.0
-K_LAT = 1.0
+K_LAT = 1.5
 K_LON = 1.0
 
 show_animation = True
