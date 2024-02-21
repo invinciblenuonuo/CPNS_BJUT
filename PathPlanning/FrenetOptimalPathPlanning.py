@@ -26,12 +26,12 @@ from PathPlanning.QuinticPolynomialsPlanner.quintic_polynomials_planner import \
     QuinticPolynomial
 from PathPlanning.CubicSpline import cubic_spline_planner
 
-SIM_LOOP = 500
+
 
 # Parameter
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
-MAX_ACCEL = 2.0  # maximum acceleration [m/ss]
-MAX_CURVATURE = 1.0  # maximum curvature [1/m]
+MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
+MAX_CURVATURE = 10.0  # maximum curvature [1/m]
 MAX_ROAD_WIDTH = 7.0  # maximum road width [m]
 D_ROAD_W = 1.0  # road width sampling length [m]
 DT = 0.2  # time tick [s] 
@@ -116,18 +116,19 @@ class FrenetPath:
         self.c = []
 
 
+
+class FrenetPathMethod:
+    def __init__(self):
+        self.state =1
+
     def calc_frenet_paths(self,c_speed, c_accel, c_d, c_d_d, c_d_dd, s0):
         frenet_paths = []
-        # generate path to each offset goal
 
         for di in np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W):
 
-            # Lateral motion planning
-            for Ti in np.arange(MIN_T, MAX_T, DT): #
+            # 横向运动规划
+            for Ti in np.arange(MIN_T, MAX_T, DT): 
                 fp = FrenetPath() #初始化一个路径类
-
-                # lat_qp = quintic_polynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
-
                 #计算五次多项式  起点：xs, vxs, axs 终点： xe, vxe, axe, time
                 lat_qp = QuinticPolynomial(c_d, c_d_d, c_d_dd, di, 0.0, 0.0, Ti)
 
@@ -137,7 +138,7 @@ class FrenetPath:
                 fp.d_dd = [lat_qp.calc_second_derivative(t) for t in fp.t]
                 fp.d_ddd = [lat_qp.calc_third_derivative(t) for t in fp.t]
 
-                # Longitudinal motion planning (Velocity keeping)
+                # 纵向运动规划，速度保持
                 for tv in np.arange(TARGET_SPEED - D_T_S * N_S_SAMPLE,
                                     TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S):
                     tfp = copy.deepcopy(fp)
@@ -211,6 +212,7 @@ class FrenetPath:
     def check_paths(self,fplist, ob):
         ok_ind = []
         for i, _ in enumerate(fplist):
+            #print('v=',fplist[i].s_d,'acc=',fplist[i].s_dd,'CURVATURE=',fplist[i].c)
             if any([v > MAX_SPEED for v in fplist[i].s_d]):  # Max speed check
                 continue
             elif any([abs(a) > MAX_ACCEL for a in
@@ -221,7 +223,6 @@ class FrenetPath:
                 continue
             elif not self.check_collision(fplist[i], ob):
                 continue
-
             ok_ind.append(i)
 
         return [fplist[i] for i in ok_ind]

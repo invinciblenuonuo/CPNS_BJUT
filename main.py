@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame 
 
-from PathPlanning.FrenetOptimalPathPlanning import FrenetPath
+from PathPlanning.FrenetOptimalPathPlanning import FrenetPathMethod
 
 #qcar控制量
 qcar0=[0,0,False,False,False,False,False] 
@@ -39,7 +39,7 @@ get_state_stop=False#结束状态标志位
 
 
 
-
+#键盘回调函数
 def callback(sign):
     if sign.event_type == 'down' and sign.name == 'k':
         global map_sig
@@ -67,7 +67,7 @@ def callback(sign):
     if sign.event_type == 'up' and (sign.name == 'left' or sign.name == 'right'):
         qcar0[1]=0
 
-
+#地图处理函数
 def map_process():
     with open("./data/globalmap.txt", 'r') as f:
         lines=f.readlines()
@@ -79,16 +79,18 @@ def map_process():
         process_x.append(float(x))
         process_y.append(float(y))  
     print("load succcessful")
-    tx, ty, tyaw, tc, csp = FrenetPath.generate_target_course(process_x,process_y)
+    tx, ty, tyaw, tc, csp = FrenetPathMethod.generate_target_course(process_x,process_y)
     f.close
     return tx, ty, tyaw, tc, csp
 
+#地图展示
 def map_show():
     tx, ty, tyaw, tc, csp=map_process()
     plt.scatter(tx,ty,marker='.', color='coral')
     plt.show()
 
 
+#控制函数
 def control_task(qcar,control,lock):
     global get_state_stopk
     global map_sig
@@ -101,6 +103,7 @@ def control_task(qcar,control,lock):
             break
         time.sleep(0.01)
 
+#建图任务（一般不用）
 def mapping_task(qcar , lock):
     global map_sig
     while True:
@@ -117,6 +120,7 @@ def mapping_task(qcar , lock):
             break
         time.sleep(0.05)
 
+#车辆状态监控任务
 def monitor_temp(car,qcar,lock):
     global get_state_stopk
     while True:
@@ -129,17 +133,20 @@ def monitor_temp(car,qcar,lock):
             break
         time.sleep(0.1)
 
+
+#路径规划函数
 def path_planning_task(qcar_state,lock):
     tx, ty, tyaw, tc, csp = map_process()
-    PathMethod = FrenetPath()
+    PathMethod = FrenetPathMethod()
     while True:
+        #输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
         path = PathMethod.frenet_optimal_planning(
         csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
         qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
+        #print('path=',path)
         if get_state_stop:
             break
         time.sleep(0.1)
-
 
 
 
@@ -153,12 +160,13 @@ class path_state:
                 ])
 
         # initial state
-        self.c_speed = 10.0 / 3.6  # current speed [m/s]
+        self.c_speed =0  # current speed [m/s]
         self.c_accel = 0.0  # current acceleration [m/ss]
-        self.c_d = 2.0  # current lateral position [m]
+        self.c_d = 0.0  # current lateral position [m]
         self.c_d_d = 0.0  # current lateral speed [m/s]
         self.c_d_dd = 0.0  # current lateral acceleration [m/s]
         self.s0 = 0.0  # current course position
+
 
 def main():
     os.system('cls')
