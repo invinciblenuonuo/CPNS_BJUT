@@ -30,13 +30,19 @@ from pandas import DataFrame
 
 from PathPlanning.FrenetOptimalPathPlanning import FrenetPathMethod
 
-#qcar控制量
-qcar0=[0,0,False,False,False,False,False] 
+class Qcar_State_Cartesian:
+    def __init__(self):
+        self.location=[0,0,0]
+        self.rotation=[0,0,0]
+        self.car_speed=0
+        self.acc=[0,0,0]
+
+#qcar控制量 分别为 油门、转向角、车灯
+qcar0=[0,0,False] 
 #全局车速
 global_car_speed=0.05
 #qcar状态变量
-location=[0,0,0]
-rotation=[0,0,0]
+qcar_state_cartesian = Qcar_State_Cartesian()
 #信号量
 map_sig=False  #地图保存标识
 car_stop=False #停车标识
@@ -59,13 +65,10 @@ def callback(sign):
         car_stop=not car_stop
     if sign.event_type == 'down' and sign.name == 'up':
         qcar0[0]=global_car_speed
-        qcar0[5]=False
     if sign.event_type == 'down' and sign.name == 'down':
         qcar0[0]=-global_car_speed
-        qcar0[5]=True
     if sign.event_type == 'up' and (sign.name == 'up' or sign.name == 'down'):
         qcar0[0]=0
-        qcar0[5]=False
     if sign.event_type == 'down' and sign.name == 'left':
         qcar0[1]=0.4
     if sign.event_type == 'down' and sign.name == 'right':
@@ -91,12 +94,15 @@ def map_process():
     return tx, ty, tyaw, tc, csp
 
 #地图展示
-def map_show(path):
+def map_show():
     tx, ty, tyaw, tc, csp=map_process()
     plt.scatter(tx,ty,marker='.', color='coral')
-    plt.scatter(path.x,path.y,marker='.',color='red')
+    x =  [-0.9966551063195354, -1.0114842059839457, -1.0170770812537815, -1.009731280726339, -0.9864582321029284, -0.9456757601590957, -0.8848583809884947, -0.8103180948918873, -0.7429436166040125, -0.6552412486042134, -0.5600889333705406, -0.46234967625381623, -0.34823770288965256, -0.23406586512958683, -0.11643663323443615, 0.022446743228243814, 0.16760581164078006, 0.3163077096848045, 0.4698234554310498, 0.6300384064938603, 0.7938522459685187]
+    y = [-0.959766271075045, -1.040002866571236, -1.1180279205048145, -1.190558504169932, -1.2548409706321733, -1.3082389913601022, -1.3486129737540613, -1.372230894852545, -1.3790826128125868, -1.3757478953853681, -1.359991973141661, -1.3353939696947899, -1.30375818220151, -1.2687685532794517, -1.2354155500677364, -1.2068379796535167, -1.1781628920959544, -1.1527692503767755, -1.135259051946124, -1.1282091716054239, -1.1292996891252753]
+    plt.scatter(x,y,marker='.',color='red')
     plt.show()
     
+
 
 #建图任务（一般不用）
 def mapping_task(qcar , lock):
@@ -115,6 +121,12 @@ def mapping_task(qcar , lock):
             break
         time.sleep(0.05)
 
+def save_path(path):
+    with open("./data/path.txt", 'a') as f:
+        f.write(str(path.x)+'|*****|'+str(path.y)+'\n \n \n')
+    f.close
+   
+
 #车辆状态监控任务
 def monitor_temp(car,qcar,lock):
     global get_state_stopk
@@ -132,20 +144,15 @@ def monitor_temp(car,qcar,lock):
 
 
 last_point=0
-#寻找匹配点
+#寻找在全局路径上的匹配点
 def find_proper_point(xc,yc,xlist,ylist,csp):
     global last_point
-    proper_s = 0
-    proper_x = 0
-    proper_y = 0
-    proper_theta = 0
-    proper_kappa = 0
     d_last = 10000
     proper_index = 0
 
     for i in range( last_point , len(xlist) ):
         d = sqrt ( (xc - xlist[i])**2 + (yc - ylist[i])**2 )
-        print(i,',',d)
+        #print(i,',',d)
         if d_last < d:
             proper_index = i-1
             last_point = i-1
@@ -157,15 +164,17 @@ def find_proper_point(xc,yc,xlist,ylist,csp):
     proper_x = xlist[proper_index]
     proper_y = ylist[proper_index]
     proper_kappa  = csp.calc_curvature(proper_index*0.05)
+    proper_dkappa = csp.calc_dcurvature(proper_index*0.05)
     #print('xlist=',xlist[proper_index],'ylist=', ylist[proper_index])
-    print(proper_index)
-    return proper_s,proper_x,proper_y,proper_theta,proper_kappa
+    #print(proper_index)
+    return proper_s,proper_x,proper_y,proper_theta,proper_kappa,proper_dkappa
 
 
 
 #笛卡尔坐标系转frenet坐标系
 # rs,rx,ry,rtheta,rkappa 为参考点的参数
 # x,y,v,theta            为当前车的参数
+# 返回参数 s[0]:s  s[1]:s'  
 def cartesian_to_frenet2D(rs, rx, ry, rtheta, rkappa, x, y, v, theta):
     s_condition = np.zeros(2)
     d_condition = np.zeros(2)
@@ -187,9 +196,47 @@ def cartesian_to_frenet2D(rs, rx, ry, rtheta, rkappa, x, y, v, theta):
     d_condition[1] = one_minus_kappa_r_d * tan_delta_theta
     
     
-    s_condition[0] = rs
+    s_condition[0] = rs 
     s_condition[1] = v * cos_delta_theta / one_minus_kappa_r_d
 
+    return s_condition, d_condition 
+
+
+
+def cartesian_to_frenet3D(rs, rx, ry, rtheta, rkappa, rdkappa, x, y, v, a, theta, kappa):
+    s_condition = np.zeros(3)
+    d_condition = np.zeros(3)
+    
+    dx = x - rx
+    dy = y - ry
+    
+    cos_theta_r = cos(rtheta)
+    sin_theta_r = sin(rtheta)
+    
+    cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
+    d_condition[0] = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
+    
+    delta_theta = theta - rtheta
+    tan_delta_theta = tan(delta_theta)
+    cos_delta_theta = cos(delta_theta)
+    
+    one_minus_kappa_r_d = 1 - rkappa * d_condition[0]
+    d_condition[1] = one_minus_kappa_r_d * tan_delta_theta
+    
+    kappa_r_d_prime = rdkappa * d_condition[0] + rkappa * d_condition[1]
+    
+    d_condition[2] = (-kappa_r_d_prime * tan_delta_theta + 
+      one_minus_kappa_r_d / cos_delta_theta / cos_delta_theta *
+          (kappa * one_minus_kappa_r_d / cos_delta_theta - rkappa))
+    
+    s_condition[0] = rs
+    s_condition[1] = v * cos_delta_theta / one_minus_kappa_r_d
+    
+    delta_theta_prime = one_minus_kappa_r_d / cos_delta_theta * kappa - rkappa
+    s_condition[2] = ((a * cos_delta_theta -
+                       s_condition[1] * s_condition[1] *
+                       (d_condition[1] * delta_theta_prime - kappa_r_d_prime)) /
+                          one_minus_kappa_r_d)
     return s_condition, d_condition
 
 
@@ -197,33 +244,44 @@ def cartesian_to_frenet2D(rs, rx, ry, rtheta, rkappa, x, y, v, theta):
 def path_planning_task(qcar_state,path_queue,lock):
     tx, ty, tyaw, tc, csp = map_process()
     PathMethod = FrenetPathMethod()
-    global location
-    global rotation
     global last_point
+    global qcar_state_cartesian
     last_point=0
     print("planning task starting....")
     time.sleep(1) #此处的延时是因为如果之间启动任务会导致qcar的初始位置获取错误
     print("planning task start!")
     while True:
-        c_x = location[0]
-        c_y = location[1]
-        c_theta = rotation[2]
-        #寻找匹配点
-        proper_s,proper_x,proper_y,proper_theta,proper_kappa=find_proper_point(location[0], location[1], tx, ty , csp)
-        #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
-        c_s,c_l = cartesian_to_frenet2D(proper_s, proper_x, proper_y , proper_theta, proper_kappa , 
-                                        c_x, c_y , 1 , c_theta)
-        print('s=',c_s[0],'l=',c_l[0])
-        
         lock.acquire()
+        c_x=qcar_state_cartesian.location[0]
+        c_y=qcar_state_cartesian.location[1]
+        c_theta = qcar_state_cartesian.rotation[2]
+        c_speed = qcar_state_cartesian.car_speed
+        c_a = qcar_state_cartesian.acc[0]
+        c_carkappa = c_a/(c_speed**2)
         lock.release()
+        #寻找匹配点
+        proper_s,proper_x,proper_y,proper_theta,proper_kappa,proper_dkappa=find_proper_point(c_x, c_y, tx, ty , csp)
+        #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
+        # c_s,c_l = cartesian_to_frenet2D(proper_s, proper_x, proper_y , proper_theta, proper_kappa , 
+        #                                 c_x, c_y , c_speed , c_theta)
+        c_s,c_l = cartesian_to_frenet3D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, proper_dkappa, 
+                              c_x, c_y, c_speed, c_a , c_theta , c_carkappa )
+        #print('s=',c_s[0],'l=',c_l[0])
 
+        qcar_state.s0 = c_s[0]
+        qcar_state.c_speed = c_s[1]
+        qcar_state.c_speed = c_s[2]
+        qcar_state.c_d = c_l[0]
+        qcar_state.c_d_d = c_l[1]
+        qcar_state.c_d_d = c_l[2]
         # 输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
+        #尝试更改 只输出x，y序列，不输出 k，yaw  使用pure控制算法
         path = PathMethod.frenet_optimal_planning(
         csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
         qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
+        #save_path(path)
         path_queue.put(path)
-        #print('path=',path)
+        #print('pathx=',path.x,'pathy=',path.y)
         if get_state_stop:
             break
         time.sleep(0.1)
@@ -233,17 +291,22 @@ def path_planning_task(qcar_state,path_queue,lock):
 def control_task(pal_car,qvl_car,control,path_queue,lock):
     global get_state_stopk
     global map_sig
-    global location
-    global rotation
+    global qcar_state_cartesian
     count=0
     print("control task start!")
     while True:
+        #控制信号输出
         pal_car.read_write_std(control[0],control[1],control[2])
-
-        lock.acquire()
+        #获取转速到车速
         statue, location, rotation, scale = qvl_car.get_world_transform()
-        lock.release()
-
+        lock.acquire()
+        for i in range(3):
+            qcar_state_cartesian.location[i]=location[i]
+            qcar_state_cartesian.rotation[i]=rotation[i]
+            qcar_state_cartesian.acc[i]=pal_car.accelerometer[i]
+        qcar_state_cartesian.car_speed=pal_car.motorTach 
+        lock.release()    
+            
         #从队列中获取规划好的路径
         if not path_queue.empty():
             path = path_queue.get_nowait()           
@@ -292,17 +355,14 @@ def main():
             0.4,# pwmLimit= 
             0   # steeringBias=
     )
-
     #qvl链接官方qcar
     qcar = QLabsQCar(qlabs)
     qcar.actorNumber=0
     lock = Lock()
     global qcar0
     global get_state_stop
-
     #定义qcar路径规划所需的状态信息
     qcar_path_state=path_state()
-
     #使用FIFO队列进行线程之间的通信
     path_queue = Queue(maxsize=10)
 
@@ -312,16 +372,16 @@ def main():
     thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,path_queue,lock))
     thread_path_planning.start()
 
+
     # thread_monitor=Thread(target=monitor_temp,args=(car,qcar,lock))
     # thread_monitor.start()
 
     # thread_mapping = Thread(target=mapping_task,args=(qcar,lock))
     # thread_mapping.start()
-    
     #map_show(path_queue.get())
     keyboard.hook(callback)
     time.sleep(1)
-
+    #map_show()
     # 必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")
     QLabsRealTime().terminate_all_real_time_models()

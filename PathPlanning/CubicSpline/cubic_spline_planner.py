@@ -137,6 +137,18 @@ class CubicSpline1D:
         ddy = 2.0 * self.c[i] + 6.0 * self.d[i] * dx
         return ddy
 
+    #增写
+    def calc_third_derivative(self, x):
+        if x < self.x[0]:
+            return None
+        elif x > self.x[-1]:
+            return None
+
+        i = self.__search_index(x)
+        dx = x - self.x[i]
+        dddy = 6.0 * self.d[i]
+        return dddy
+
     def __search_index(self, x):
         """
         search data segment index
@@ -282,10 +294,26 @@ class CubicSpline2D:
         """
         dx = self.sx.calc_first_derivative(s)
         ddx = self.sx.calc_second_derivative(s)
+
         dy = self.sy.calc_first_derivative(s)
         ddy = self.sy.calc_second_derivative(s)
+
         k = (ddy * dx - ddx * dy) / ((dx ** 2 + dy ** 2)**(3 / 2))
         return k
+
+    def calc_dcurvature(self, s):
+        dx = self.sx.calc_first_derivative(s)
+        ddx = self.sx.calc_second_derivative(s)
+        dddx = self.sx.calc_third_derivative(s)
+
+        dy = self.sy.calc_first_derivative(s)
+        ddy = self.sy.calc_second_derivative(s)
+        dddy = self.sy.calc_third_derivative(s)
+        #参考 ：https://blog.csdn.net/u013468614/article/details/108416552
+        #曲率的导数公式
+        dk = ((dddy*dx - dddx*dy)*(dx**2 + dy**2) - 3*(dx*ddx + dy*ddy)*(ddy*dx - ddx*dy))/ ((dx**2 + dy**2)**3)
+ 
+        return dk
 
     def calc_yaw(self, s):
         """
