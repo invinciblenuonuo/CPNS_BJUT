@@ -97,8 +97,9 @@ def map_process():
 def map_show():
     tx, ty, tyaw, tc, csp=map_process()
     plt.scatter(tx,ty,marker='.', color='coral')
-    x =  [-0.9966551063195354, -1.0114842059839457, -1.0170770812537815, -1.009731280726339, -0.9864582321029284, -0.9456757601590957, -0.8848583809884947, -0.8103180948918873, -0.7429436166040125, -0.6552412486042134, -0.5600889333705406, -0.46234967625381623, -0.34823770288965256, -0.23406586512958683, -0.11643663323443615, 0.022446743228243814, 0.16760581164078006, 0.3163077096848045, 0.4698234554310498, 0.6300384064938603, 0.7938522459685187]
-    y = [-0.959766271075045, -1.040002866571236, -1.1180279205048145, -1.190558504169932, -1.2548409706321733, -1.3082389913601022, -1.3486129737540613, -1.372230894852545, -1.3790826128125868, -1.3757478953853681, -1.359991973141661, -1.3353939696947899, -1.30375818220151, -1.2687685532794517, -1.2354155500677364, -1.2068379796535167, -1.1781628920959544, -1.1527692503767755, -1.135259051946124, -1.1282091716054239, -1.1292996891252753]
+    x =  [0.6768939321988653, 0.7342738190040454, 0.7931560580315852, 0.8549771924265726, 0.9189636101009846, 0.9876908217645406, 1.0630868937970492, 1.1424864094210017, 1.2322970373928595, 1.3271017770259312, 1.4265545686372028, 1.5334423867053903, 1.6425477183261, 1.7535236696909395, 1.8600718719605718, 1.9575772093417896, 2.0419444597435046, 2.1103444211488704, 2.145488428610511, 2.1608574764332307]
+    y = [-1.0822624931777418, -1.070317615202303, -1.0533568677917464, -1.0349029885666698, -1.0164057441616907, -0.9987800726219744, -0.9836898393813872, -0.9712304439408933, -0.9606044638699944, -0.952862093732818, -0.9434807034277328, -0.9278175877109942, -0.9045440898007768, -0.8609486198002108, -0.7983171218538753, -0.7071097366464423, -0.5925863810187582, -0.4608300724948547, -0.3134410085230895, -0.15273589812751862]
+ 
     plt.scatter(x,y,marker='.',color='red')
     plt.show()
     
@@ -264,18 +265,22 @@ def path_planning_task(qcar_state,path_queue,lock):
         #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
         # c_s,c_l = cartesian_to_frenet2D(proper_s, proper_x, proper_y , proper_theta, proper_kappa , 
         #                                 c_x, c_y , c_speed , c_theta)
+        #此处存在问题，有时d_d_d会非常大
         c_s,c_l = cartesian_to_frenet3D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, proper_dkappa, 
                               c_x, c_y, c_speed, c_a , c_theta , c_carkappa )
-        #print('s=',c_s[0],'l=',c_l[0])
+        
+        
+        #print('s=',c_s,'l=',c_l)
 
         qcar_state.s0 = c_s[0]
         qcar_state.c_speed = c_s[1]
-        qcar_state.c_speed = c_s[2]
+        qcar_state.c_accel = c_s[2]
         qcar_state.c_d = c_l[0]
         qcar_state.c_d_d = c_l[1]
-        qcar_state.c_d_d = c_l[2]
+        qcar_state.c_d_dd = c_l[2]
+       
         # 输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
-        #尝试更改 只输出x，y序列，不输出 k，yaw  使用pure控制算法
+        # 尝试更改 只输出x，y序列，不输出 k，yaw  使用pure控制算法
         path = PathMethod.frenet_optimal_planning(
         csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
         qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
@@ -306,7 +311,7 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
             qcar_state_cartesian.acc[i]=pal_car.accelerometer[i]
         qcar_state_cartesian.car_speed=pal_car.motorTach 
         lock.release()    
-            
+        #print(qcar_state_cartesian.rotation[2])
         #从队列中获取规划好的路径
         if not path_queue.empty():
             path = path_queue.get_nowait()           
@@ -381,7 +386,7 @@ def main():
     #map_show(path_queue.get())
     keyboard.hook(callback)
     time.sleep(1)
-    #map_show()
+    map_show()
     # 必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")
     QLabsRealTime().terminate_all_real_time_models()
