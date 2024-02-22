@@ -33,7 +33,7 @@ from PathPlanning.FrenetOptimalPathPlanning import FrenetPathMethod
 #qcar控制量
 qcar0=[0,0,False,False,False,False,False] 
 #全局车速
-global_car_speed=0.1
+global_car_speed=0.05
 #qcar状态变量
 location=[0,0,0]
 rotation=[0,0,0]
@@ -143,14 +143,16 @@ def find_proper_point(xc,yc,xlist,ylist,csp):
     d_last = 10000
     proper_index = 0
 
-    for i in range(last_point,len(xlist)):
+    for i in range( last_point , len(xlist) ):
         d = sqrt ( (xc - xlist[i])**2 + (yc - ylist[i])**2 )
+        print(i,',',d)
         if d_last < d:
             proper_index = i-1
             last_point = i-1
             break
         d_last = d
 
+    proper_s = proper_index*0.05
     proper_theta = csp.calc_yaw(proper_index*0.05)
     proper_x = xlist[proper_index]
     proper_y = ylist[proper_index]
@@ -197,10 +199,22 @@ def path_planning_task(qcar_state,path_queue,lock):
     PathMethod = FrenetPathMethod()
     global location
     global rotation
+    global last_point
+    last_point=0
+    print("planning task starting....")
+    time.sleep(1) #此处的延时是因为如果之间启动任务会导致qcar的初始位置获取错误
     print("planning task start!")
     while True:
+        c_x = location[0]
+        c_y = location[1]
+        c_theta = rotation[2]
+        #寻找匹配点
         proper_s,proper_x,proper_y,proper_theta,proper_kappa=find_proper_point(location[0], location[1], tx, ty , csp)
-        #print('x=',location[0],'y=', location[1])
+        #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
+        c_s,c_l = cartesian_to_frenet2D(proper_s, proper_x, proper_y , proper_theta, proper_kappa , 
+                                        c_x, c_y , 1 , c_theta)
+        print('s=',c_s[0],'l=',c_l[0])
+        
         lock.acquire()
         lock.release()
 
