@@ -46,15 +46,15 @@ from PathPlanning.CubicSpline import cubic_spline_planner
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
 MAX_ACCEL = 10.0  # maximum acceleration [m/ss]
 MAX_CURVATURE = 10.0  # maximum curvature [1/m]
-MAX_ROAD_WIDTH = 0.01 # maximum road width [m]
-D_ROAD_W = 0.001  # road width sampling length [m]
+MAX_ROAD_WIDTH = 0.4 # maximum road width [m]
+D_ROAD_W = 0.01  # road width sampling length [m]
 DT = 0.2  # time tick [s] 
-MAX_T = 5.0  # max prediction time [m]
-MIN_T = 4.0  # min prediction time [m]
-TARGET_SPEED = 3.0 / 3.6  # target speed [m/s]
-D_T_S = 0.5 / 3.6  # target speed sampling length [m/s]
+MAX_T = 4.0  # max prediction time [m]
+MIN_T = 3.0  # min prediction time [m]
+TARGET_SPEED = 0.5  # target speed [m/s]
+D_T_S = 0.05  # target speed sampling length [m/s]
 N_S_SAMPLE = 1  # sampling number of target speed
-ROBOT_RADIUS = 0.02  # robot radius [m]
+ROBOT_RADIUS = 0.2  # robot radius [m]
 
 # cost weights
 K_J = 0.1
@@ -138,7 +138,7 @@ class FrenetPathMethod:
     def calc_frenet_paths(self,c_speed, c_accel, c_d, c_d_d, c_d_dd, s0):
         frenet_paths = []
 
-        for di in np.arange(-MAX_ROAD_WIDTH, MAX_ROAD_WIDTH, D_ROAD_W):
+        for di in np.arange(-0.1, MAX_ROAD_WIDTH, D_ROAD_W):
 
             # 横向运动规划
             for Ti in np.arange(MIN_T, MAX_T, DT): 
@@ -171,7 +171,7 @@ class FrenetPathMethod:
 
                     tfp.cd = K_J * Jp + K_T * Ti + K_D * tfp.d[-1] ** 2
                     tfp.cv = K_J * Js + K_T * Ti + K_D * ds
-                    tfp.cf = K_LAT * tfp.cd + K_LON * tfp.cv
+                    tfp.cf = K_LAT * tfp.cd + K_LON * tfp.cv 
 
                     frenet_paths.append(tfp)
 
@@ -235,8 +235,8 @@ class FrenetPathMethod:
             elif any([abs(c) > MAX_CURVATURE for c in
                     fplist[i].c]):  # Max curvature check
                 continue
-            # elif not self.check_collision(fplist[i], ob):
-            #     continue
+            elif not self.check_collision(fplist[i], ob):
+                continue
             ok_ind.append(i)
 
         return [fplist[i] for i in ok_ind]

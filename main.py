@@ -276,48 +276,54 @@ def path_planning_task(qcar_state,path_queue,lock):
         c_aside = qcar_state_cartesian.acc[1]
         c_carkappa = c_aside/(c_speed**2)
         lock.release()
+
         #寻找匹配点
         proper_s,proper_x,proper_y,proper_theta,proper_kappa,proper_dkappa=find_proper_point(c_x, c_y, tx, ty , csp)
+
         #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
-        # c_s,c_l = cartesian_to_frenet2D(proper_s, proper_x, proper_y , proper_theta, proper_kappa , 
-        #                                 c_x, c_y , c_speed , c_theta)
-        #此处存在问题，有时d_d_d会非常大
         c_s,c_l = cartesian_to_frenet3D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, proper_dkappa, 
                               c_x, c_y, c_speed, c_a , c_theta , c_carkappa )
-        
-        
+        print(c_l[0])
         #print('s=',c_s,'l=',c_l)
 
-        qcar_state.s0 = c_s[0]
-        qcar_state.c_speed = c_s[1]
-        qcar_state.c_accel = c_s[2]
+        # qcar_state.s0 = c_s[0]
+        # qcar_state.c_speed = c_s[1]
+        # qcar_state.c_accel = c_s[2]
 
-        qcar_state.c_d = c_l[0]
-        qcar_state.c_d_d = c_l[1]
-        qcar_state.c_d_dd = c_l[2]
-       
+        # qcar_state.c_d = c_l[0]
+        # qcar_state.c_d_d =  0
+        # qcar_state.c_d_dd = 0
+        #求导数和二阶导的算法存在问题
+
+        qcar_state.ob = np.array([
+                                  [2.2 , 1.8],
+        [30.0, 6.0]
+        ])
+
+    
         # 输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
         # 尝试更改 只输出x，y序列，不输出 k，yaw  使用pure控制算法
         path = PathMethod.frenet_optimal_planning(
         csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
         qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
+
         save_path(path)
         path_queue.put(path)
 
-        # qcar_state.s0 = path.s[1]
-        # qcar_state.c_d = path.d[1]
-        # qcar_state.c_d_d = path.d_d[1]
-        # qcar_state.c_d_dd = path.d_dd[1]
-        # qcar_state.c_speed = path.s_d[1]
-        # qcar_state.c_accel = path.s_dd[1]
+        qcar_state.s0 = path.s[1]
+        qcar_state.c_d = path.d[1]
+        qcar_state.c_d_d = path.d_d[1]
+        qcar_state.c_d_dd = path.d_dd[1]
+        qcar_state.c_speed = path.s_d[1]
+        qcar_state.c_accel = path.s_dd[1]
 
-        print("rs0:",c_s[0],"s0=",path.s[1])
-        print("rc_speed:",c_s[1],"c_speed=",path.s_d[1])
-        print("rc_accel:",c_s[2],"c_accel=",path.s_dd[1])
+        # print("rs0:",c_s[0],"s0=",path.s[1])
+        # print("rc_speed:",c_s[1],"c_speed=",path.s_d[1])
+        # print("rc_accel:",c_s[2],"c_accel=",path.s_dd[1])
         
-        print("rc_d:",c_l[1],"c_d=",path.d[1])
-        print("rc_d_d:",c_l[2],"s0=",path.d_d[1])
-        print("rc_d_dd:",c_l[0],"s0=",path.d_dd[1])
+        # print("rc_d:",c_l[1],"c_d=",path.d[1])
+        # print("rc_d_d:",c_l[2],"s0=",path.d_d[1])
+        # print("rc_d_dd:",c_l[0],"s0=",path.d_dd[1])
 
         #print('pathx=',path.x,'pathy=',path.y)
         if get_state_stop:
@@ -356,11 +362,9 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
 
 class path_state:
     def __init__(self):
-        self.ob = np.array([[20.0, 10.0],
-                [30.0, 6.0],
-                [30.0, 8.0],
-                [35.0, 8.0],
-                [50.0, 3.0]
+        self.ob = np.array([
+                [2.3 , 1.8],
+                [30.0, 6.0]
                 ])
 
         self.c_speed =0  
