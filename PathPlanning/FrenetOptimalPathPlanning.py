@@ -44,22 +44,22 @@ from PathPlanning.CubicSpline import cubic_spline_planner
 
 # Parameter
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
-MAX_ACCEL = 10.0  # maximum acceleration [m/ss]
-MAX_CURVATURE = 10.0  # maximum curvature [1/m]
+MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
+MAX_CURVATURE = 100.0  # maximum curvature [1/m]
 MAX_ROAD_WIDTH = 0.4 # maximum road width [m]
 D_ROAD_W = 0.01  # road width sampling length [m]
-DT = 0.2  # time tick [s] 
-MAX_T = 4.0  # max prediction time [m]
-MIN_T = 3.0  # min prediction time [m]
-TARGET_SPEED = 0.5  # target speed [m/s]
-D_T_S = 0.05  # target speed sampling length [m/s]
+DT = 0.4  # time tick [s] 
+MAX_T = 5.0  # max prediction time [m]
+MIN_T = 4.0  # min prediction time [m]
+TARGET_SPEED = 0.7  # target speed [m/s]
+D_T_S = 0.01  # target speed sampling length [m/s]
 N_S_SAMPLE = 1  # sampling number of target speed
 ROBOT_RADIUS = 0.2  # robot radius [m]
 
 # cost weights
 K_J = 0.1
 K_T = 0.1
-K_D = 1.0
+K_D = 4.0
 K_LAT = 1.0
 K_LON = 1.0
 
@@ -168,7 +168,7 @@ class FrenetPathMethod:
 
                     # square of diff from target speed
                     ds = (TARGET_SPEED - tfp.s_d[-1]) ** 2
-
+        
                     tfp.cd = K_J * Jp + K_T * Ti + K_D * tfp.d[-1] ** 2
                     tfp.cv = K_J * Js + K_T * Ti + K_D * ds
                     tfp.cf = K_LAT * tfp.cd + K_LON * tfp.cv 
@@ -211,14 +211,19 @@ class FrenetPathMethod:
 
 
     def check_collision(self,fp, ob):
+        cc=0
         for i in range(len(ob[:, 0])):
             d = [((ix - ob[i, 0]) ** 2 + (iy - ob[i, 1]) ** 2)
                 for (ix, iy) in zip(fp.x, fp.y)]
-
+            # for di in d:
+            #     cc=cc+di
+            # fp.cf=fp.cf-0.01*cc
             collision = any([di <= ROBOT_RADIUS ** 2 for di in d])
 
             if collision:
                 return False
+
+
 
         return True
 

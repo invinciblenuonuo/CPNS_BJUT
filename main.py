@@ -48,7 +48,8 @@ qcar_state_cartesian = Qcar_State_Cartesian()
 map_sig=False  #地图保存标识
 car_stop=False #停车标识
 get_state_stop=False#结束状态标志位
-
+#障碍物列表
+obs=[2.2, 0.803, 0.006]
 
 
 
@@ -283,44 +284,42 @@ def path_planning_task(qcar_state,path_queue,lock):
         #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
         c_s,c_l = cartesian_to_frenet3D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, proper_dkappa, 
                               c_x, c_y, c_speed, c_a , c_theta , c_carkappa )
-        print(c_l[0])
+        #print(c_l[0])
         #print('s=',c_s,'l=',c_l)
 
-        # qcar_state.s0 = c_s[0]
-        # qcar_state.c_speed = c_s[1]
-        # qcar_state.c_accel = c_s[2]
+        qcar_state.s0 = c_s[0]
+        qcar_state.c_speed = c_s[1]
+        qcar_state.c_accel = c_s[2]
 
-        # qcar_state.c_d = c_l[0]
-        # qcar_state.c_d_d =  0
-        # qcar_state.c_d_dd = 0
+        qcar_state.c_d = c_l[0]
+        qcar_state.c_d_d =  0
+        qcar_state.c_d_dd = 0
         #求导数和二阶导的算法存在问题
-
+        global obs
         qcar_state.ob = np.array([
-                                  [2.2 , 1.8],
-        [30.0, 6.0]
+                                  [obs[0],obs[1]],
+                                  [30.0, 6.0]
         ])
 
-    
         # 输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
         # 尝试更改 只输出x，y序列，不输出 k，yaw  使用pure控制算法
         path = PathMethod.frenet_optimal_planning(
         csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
         qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
-
-        save_path(path)
+        if path != None:
+            save_path(path)
         path_queue.put(path)
 
-        qcar_state.s0 = path.s[1]
-        qcar_state.c_d = path.d[1]
-        qcar_state.c_d_d = path.d_d[1]
-        qcar_state.c_d_dd = path.d_dd[1]
-        qcar_state.c_speed = path.s_d[1]
-        qcar_state.c_accel = path.s_dd[1]
+        # qcar_state.s0 = path.s[1]
+        # qcar_state.c_d = path.d[1]
+        # qcar_state.c_d_d = path.d_d[1]
+        # qcar_state.c_d_dd = path.d_dd[1]
+        # qcar_state.c_speed = path.s_d[1]
+        # qcar_state.c_accel = path.s_dd[1]
 
         # print("rs0:",c_s[0],"s0=",path.s[1])
         # print("rc_speed:",c_s[1],"c_speed=",path.s_d[1])
         # print("rc_accel:",c_s[2],"c_accel=",path.s_dd[1])
-        
         # print("rc_d:",c_l[1],"c_d=",path.d[1])
         # print("rc_d_d:",c_l[2],"s0=",path.d_d[1])
         # print("rc_d_dd:",c_l[0],"s0=",path.d_dd[1])
@@ -328,8 +327,7 @@ def path_planning_task(qcar_state,path_queue,lock):
         #print('pathx=',path.x,'pathy=',path.y)
         if get_state_stop:
             break
-        time.sleep(0.1)
-
+        time.sleep(0.08)
 
 #控制函数
 def control_task(pal_car,qvl_car,control,path_queue,lock):
@@ -337,12 +335,17 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
     global map_sig
     global qcar_state_cartesian
     count=0
+    target_ind=0
+    purepursuit = pure_pursuit()
+    pathsig=False
     print("control task start!")
+    pal_car.read_write_std(0, 0 ,control[2])
+    last_valid_path=0
     while True:
-        #控制信号输出
-        pal_car.read_write_std(control[0],control[1],control[2])
-        #获取转速到车速
+        
         statue, location, rotation, scale = qvl_car.get_world_transform()
+        
+        #获取转速到车速
         lock.acquire()
         for i in range(3):
             qcar_state_cartesian.location[i]=location[i]
@@ -353,17 +356,95 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
         #print(qcar_state_cartesian.rotation[2])
         #从队列中获取规划好的路径
         if not path_queue.empty():
-            path = path_queue.get_nowait()           
+            path = path_queue.get_nowait() 
+            if path!=None:
+                last_valid_path = path
+            #target_ind=0#如果路径重新规划了，则需要清零目标index
+            pathsig=True
+
+        if pathsig:
+            lock.acquire()
+            di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,last_valid_path.x,last_valid_path.y,target_ind)
+            #print(di)
+            lock.release()
+            # if(di > 100):
+            #     di = 100
+            # elif(di<-100):
+            #     di = -100
+            #控制信号输出
+            pal_car.read_write_std(0.05, di/pi ,control[2])
+
         #print(path.x)        
         if get_state_stop:
             break
         time.sleep(0.01)
 
+class pure_pursuit:
+    k = 0.02    # 前视比例
+    Lfc = 0.35  # 前视距离
+    Kp = 1.0   # 速度比例
+    dt = 0.1   # 
+    L = 2.6  # 轴距  
+    
+    def calc_target_index(self,state, cx, cy):
+
+        '寻找最近的点'
+        #遍历所有点，将到所有点到当前车坐标的距离保存
+        dx = [state.location[0] - icx for icx in cx]
+        dy = [state.location[1] - icy for icy in cy]
+
+        #计算距离
+        d = [abs(math.sqrt(idx ** 2 + idy ** 2)) for (idx, idy) in zip(dx, dy)]
+
+        #寻找最近的点的序号
+        ind = d.index(min(d))
+
+        L = 0.0
+
+        Lf = self.Lfc + self.k*state.car_speed
+
+        '寻找前视点'
+
+        while Lf > L and (ind + 1) < len(cx): #如果最近的点与当前遍历到的点的距离小于前世距离就继续循环
+            dx = cx[ind + 1] - cx[ind]  #两点坐标相对距离
+            dy = cy[ind + 1] - cy[ind]  
+            L += math.sqrt(pow(dx,2) + pow(dy,2)) #累加距离
+            ind += 1 
+
+        return ind
+
+
+    def pure_pursuit_control(self, state, cx, cy, pind):
+
+        ind = self.calc_target_index(state, cx, cy)
+
+        # if pind >= ind:
+        #     ind = pind
+
+        if ind < len(cx):
+            tx = cx[ind]
+            ty = cy[ind]
+        else:
+            tx = cx[-1]
+            ty = cy[-1]
+            ind = len(cx) - 1
+
+        alpha = math.atan2(ty - state.location[1], tx - state.location[0]) - state.rotation[2]
+
+        if state.car_speed < 0:  # back
+            alpha = math.pi - alpha
+
+        Lf = self.Lfc + self.k*state.car_speed
+
+        delta = math.atan2(2.0 * self.L * math.sin(alpha) / Lf, 1.0)
+
+        return delta, ind
+
 
 class path_state:
     def __init__(self):
         self.ob = np.array([
-                [2.3 , 1.8],
+                #[2.45 , 1.6],
                 [30.0, 6.0]
                 ])
 
@@ -388,7 +469,15 @@ def main():
         print("Unable to connect to QLabs")
         return
     print("Connected")
-    
+    global obs
+    block0=QLabsBasicShape(qlabs)
+    block=block0.spawn_degrees(
+                          location=obs, 
+                          rotation=[0, 0, 0], 
+                          scale=[0.1, 0.1, 0.4], 
+                          configuration=0, 
+                          waitForConfirmation=True)
+
     #pal链接官方生成的qcar
     car = QCar(            
             0,  # id=
