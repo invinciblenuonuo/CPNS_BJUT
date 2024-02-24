@@ -44,10 +44,10 @@ from PathPlanning.CubicSpline import cubic_spline_planner
 
 # Parameter
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
-MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
-MAX_CURVATURE = 100.0  # maximum curvature [1/m]
-MAX_ROAD_WIDTH = 0.05 # maximum road width [m]
-D_ROAD_W = 0.005  # road width sampling length [m]
+MAX_ACCEL = 10.0  # maximum acceleration [m/ss]
+MAX_CURVATURE = 10.0  # maximum curvature [1/m]
+MAX_ROAD_WIDTH = 0.01 # maximum road width [m]
+D_ROAD_W = 0.001  # road width sampling length [m]
 DT = 0.2  # time tick [s] 
 MAX_T = 5.0  # max prediction time [m]
 MIN_T = 4.0  # min prediction time [m]
@@ -60,7 +60,7 @@ ROBOT_RADIUS = 0.02  # robot radius [m]
 K_J = 0.1
 K_T = 0.1
 K_D = 1.0
-K_LAT = 1.5
+K_LAT = 1.0
 K_LON = 1.0
 
 show_animation = True
@@ -193,19 +193,19 @@ class FrenetPathMethod:
                 fp.x.append(fx)
                 fp.y.append(fy)
 
-            # calc yaw and ds
-            for i in range(len(fp.x) - 1):
-                dx = fp.x[i + 1] - fp.x[i]
-                dy = fp.y[i + 1] - fp.y[i]
-                fp.yaw.append(math.atan2(dy, dx))
-                fp.ds.append(math.hypot(dx, dy))
+            # # calc yaw and ds
+            # for i in range(len(fp.x) - 1):
+            #     dx = fp.x[i + 1] - fp.x[i]
+            #     dy = fp.y[i + 1] - fp.y[i]
+            #     fp.yaw.append(math.atan2(dy, dx))
+            #     fp.ds.append(math.hypot(dx, dy))
 
-            fp.yaw.append(fp.yaw[-1])
-            fp.ds.append(fp.ds[-1])
+            # fp.yaw.append(fp.yaw[-1])
+            # fp.ds.append(fp.ds[-1])
 
-            # calc curvature
-            for i in range(len(fp.yaw) - 1):
-                fp.c.append((fp.yaw[i + 1] - fp.yaw[i]) / fp.ds[i])
+            # # calc curvature
+            # for i in range(len(fp.yaw) - 1):
+            #     fp.c.append((fp.yaw[i + 1] - fp.yaw[i]) / fp.ds[i])
 
         return fplist
 
@@ -235,8 +235,8 @@ class FrenetPathMethod:
             elif any([abs(c) > MAX_CURVATURE for c in
                     fplist[i].c]):  # Max curvature check
                 continue
-            elif not self.check_collision(fplist[i], ob):
-                continue
+            # elif not self.check_collision(fplist[i], ob):
+            #     continue
             ok_ind.append(i)
 
         return [fplist[i] for i in ok_ind]

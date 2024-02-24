@@ -25,6 +25,7 @@ import keyboard
 from math import *
 
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 import numpy as np
 from pandas import DataFrame 
 
@@ -97,12 +98,26 @@ def map_process():
 def map_show():
     tx, ty, tyaw, tc, csp=map_process()
     plt.scatter(tx,ty,marker='.', color='coral')
-    x =  [0.6768939321988653, 0.7342738190040454, 0.7931560580315852, 0.8549771924265726, 0.9189636101009846, 0.9876908217645406, 1.0630868937970492, 1.1424864094210017, 1.2322970373928595, 1.3271017770259312, 1.4265545686372028, 1.5334423867053903, 1.6425477183261, 1.7535236696909395, 1.8600718719605718, 1.9575772093417896, 2.0419444597435046, 2.1103444211488704, 2.145488428610511, 2.1608574764332307]
-    y = [-1.0822624931777418, -1.070317615202303, -1.0533568677917464, -1.0349029885666698, -1.0164057441616907, -0.9987800726219744, -0.9836898393813872, -0.9712304439408933, -0.9606044638699944, -0.952862093732818, -0.9434807034277328, -0.9278175877109942, -0.9045440898007768, -0.8609486198002108, -0.7983171218538753, -0.7071097366464423, -0.5925863810187582, -0.4608300724948547, -0.3134410085230895, -0.15273589812751862]
- 
-    plt.scatter(x,y,marker='.',color='red')
+    x = [-0.12229859914334305, -0.0643133742519453, -0.002962153139544027, 0.06017384402580545, 0.1279899873171206, 0.19957998176355213, 0.2789523467377846, 0.3656232135337013, 0.4693361563252369, 0.5723358400318953, 0.6859724178825005, 0.7989476065224097, 0.9095677642854219, 1.0240229909340746, 1.1438623190919146, 1.280526686024704, 1.4082805160339353, 1.5453720685229673, 1.6705908406752636, 1.8009874445967338, 1.9136784519810153, 2.008184979499254, 2.080533074011859]
+    y = [-1.0628145451023905, -1.0474440418463833, -1.003490472806171, -0.9431252417977816, -0.876514287611952, -0.8106720884901806, -0.7524173876906353, -0.7056426448421043, -0.6742553929454941, -0.6598994968549474, -0.6612854891603108, -0.6778799626977008, -0.7057088524840394, -0.7382674342421898, -0.7734851395311872, -0.8071344077636791, -0.8352427509770975, -0.8464660822234932, -0.8380039955715467, -0.7930563177088074, -0.7128064208620624, -0.5995271756940493, -0.4648666958561655]
+    plt.scatter(x,y,marker='.', color='red')
     plt.show()
     
+def mapshow_task(queue,lock):
+    tx, ty, tyaw, tc, csp=map_process()
+    time.sleep(2)
+    while True:
+        if not queue.empty():
+            path = queue.get_nowait()           
+        plt.clf()
+        plt.plot(tx,ty,'g-')  
+        plt.plot(path.x,path.x,'r^')  
+        plt.show()
+        time.sleep(0.5)
+        plt.close()
+        if get_state_stop:
+            break
+
 
 
 #建图任务（一般不用）
@@ -124,7 +139,7 @@ def mapping_task(qcar , lock):
 
 def save_path(path):
     with open("./data/path.txt", 'a') as f:
-        f.write(str(path.x)+'|*****|'+str(path.y)+'\n \n \n')
+        f.write(str(path.x)+'|'+str(path.y)+'\n')
     f.close
    
 
@@ -258,7 +273,8 @@ def path_planning_task(qcar_state,path_queue,lock):
         c_theta = qcar_state_cartesian.rotation[2]
         c_speed = qcar_state_cartesian.car_speed
         c_a = qcar_state_cartesian.acc[0]
-        c_carkappa = c_a/(c_speed**2)
+        c_aside = qcar_state_cartesian.acc[1]
+        c_carkappa = c_aside/(c_speed**2)
         lock.release()
         #寻找匹配点
         proper_s,proper_x,proper_y,proper_theta,proper_kappa,proper_dkappa=find_proper_point(c_x, c_y, tx, ty , csp)
@@ -275,6 +291,7 @@ def path_planning_task(qcar_state,path_queue,lock):
         qcar_state.s0 = c_s[0]
         qcar_state.c_speed = c_s[1]
         qcar_state.c_accel = c_s[2]
+
         qcar_state.c_d = c_l[0]
         qcar_state.c_d_d = c_l[1]
         qcar_state.c_d_dd = c_l[2]
@@ -284,8 +301,24 @@ def path_planning_task(qcar_state,path_queue,lock):
         path = PathMethod.frenet_optimal_planning(
         csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
         qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
-        #save_path(path)
+        save_path(path)
         path_queue.put(path)
+
+        # qcar_state.s0 = path.s[1]
+        # qcar_state.c_d = path.d[1]
+        # qcar_state.c_d_d = path.d_d[1]
+        # qcar_state.c_d_dd = path.d_dd[1]
+        # qcar_state.c_speed = path.s_d[1]
+        # qcar_state.c_accel = path.s_dd[1]
+
+        print("rs0:",c_s[0],"s0=",path.s[1])
+        print("rc_speed:",c_s[1],"c_speed=",path.s_d[1])
+        print("rc_accel:",c_s[2],"c_accel=",path.s_dd[1])
+        
+        print("rc_d:",c_l[1],"c_d=",path.d[1])
+        print("rc_d_d:",c_l[2],"s0=",path.d_d[1])
+        print("rc_d_dd:",c_l[0],"s0=",path.d_dd[1])
+
         #print('pathx=',path.x,'pathy=',path.y)
         if get_state_stop:
             break
@@ -360,12 +393,14 @@ def main():
             0.4,# pwmLimit= 
             0   # steeringBias=
     )
+
     #qvl链接官方qcar
     qcar = QLabsQCar(qlabs)
     qcar.actorNumber=0
     lock = Lock()
     global qcar0
     global get_state_stop
+
     #定义qcar路径规划所需的状态信息
     qcar_path_state=path_state()
     #使用FIFO队列进行线程之间的通信
@@ -376,8 +411,7 @@ def main():
 
     thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,path_queue,lock))
     thread_path_planning.start()
-
-
+   
     # thread_monitor=Thread(target=monitor_temp,args=(car,qcar,lock))
     # thread_monitor.start()
 
@@ -386,7 +420,7 @@ def main():
     #map_show(path_queue.get())
     keyboard.hook(callback)
     time.sleep(1)
-    map_show()
+    #map_show()
     # 必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")
     QLabsRealTime().terminate_all_real_time_models()
