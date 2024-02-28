@@ -48,7 +48,6 @@ x = hSystem.set_title_string('ACC Self Driving Car Competition', waitForConfirma
 
 
 ### Flooring
-
 x_offset = 0.13
 y_offset = 1.67
 hFloor = QLabsFlooring(qlabs)

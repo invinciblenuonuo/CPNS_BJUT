@@ -48,9 +48,9 @@ MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
 MAX_CURVATURE = 100.0  # maximum curvature [1/m]
 MAX_ROAD_WIDTH = 0.4 # maximum road width [m]
 D_ROAD_W = 0.01  # road width sampling length [m]
-DT = 0.4  # time tick [s] 
+DT = 0.2  # time tick [s] 
 MAX_T = 5.0  # max prediction time [m]
-MIN_T = 4.0  # min prediction time [m]
+MIN_T = 4.2  # min prediction time [m]
 TARGET_SPEED = 0.7  # target speed [m/s]
 D_T_S = 0.01  # target speed sampling length [m/s]
 N_S_SAMPLE = 1  # sampling number of target speed
@@ -152,28 +152,43 @@ class FrenetPathMethod:
                 fp.d_dd = [lat_qp.calc_second_derivative(t) for t in fp.t]
                 fp.d_ddd = [lat_qp.calc_third_derivative(t) for t in fp.t]
 
+                #这里不用速度规划了，因为不稳定
+                path=1.0
+                for i in np.arange(s0,s0+path,0.05):
+                    fp.s.append(i)
+                    fp.s_d.append(0)
+                    fp.s_dd.append(0)
+                    fp.s_ddd.append(0)
+
+                Jp = sum(np.power(fp.d_ddd, 2))
+                fp.cd = K_J * Jp + K_T * Ti + K_D * fp.d[-1] ** 2
+                fp.cv = K_T * Ti 
+                fp.cf = K_LAT * fp.cd + K_LON * fp.cv 
+                frenet_paths.append(fp)
+
+
                 # 纵向运动规划，速度保持
-                for tv in np.arange(TARGET_SPEED - D_T_S * N_S_SAMPLE,
-                                    TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S):
-                    tfp = copy.deepcopy(fp)
-                    lon_qp = QuarticPolynomial(s0, c_speed, c_accel, tv, 0.0, Ti)
+                # for tv in np.arange(TARGET_SPEED - D_T_S * N_S_SAMPLE,
+                #                     TARGET_SPEED + D_T_S * N_S_SAMPLE, D_T_S):
+                #     tfp = copy.deepcopy(fp)
+                #     lon_qp = QuarticPolynomial(s0, c_speed, c_accel, tv, 0.0, Ti)
 
-                    tfp.s = [lon_qp.calc_point(t) for t in fp.t]
-                    tfp.s_d = [lon_qp.calc_first_derivative(t) for t in fp.t]
-                    tfp.s_dd = [lon_qp.calc_second_derivative(t) for t in fp.t]
-                    tfp.s_ddd = [lon_qp.calc_third_derivative(t) for t in fp.t]
+                #     tfp.s = [lon_qp.calc_point(t) for t in fp.t]
+                #     tfp.s_d = [lon_qp.calc_first_derivative(t) for t in fp.t]
+                #     tfp.s_dd = [lon_qp.calc_second_derivative(t) for t in fp.t]
+                #     tfp.s_ddd = [lon_qp.calc_third_derivative(t) for t in fp.t]
 
-                    Jp = sum(np.power(tfp.d_ddd, 2))  # square of jerk
-                    Js = sum(np.power(tfp.s_ddd, 2))  # square of jerk
+                #     Jp = sum(np.power(tfp.d_ddd, 2))  # square of jerk
+                #     Js = sum(np.power(tfp.s_ddd, 2))  # square of jerk
 
-                    # square of diff from target speed
-                    ds = (TARGET_SPEED - tfp.s_d[-1]) ** 2
+                #     # square of diff from target speed
+                #     ds = (TARGET_SPEED - tfp.s_d[-1]) ** 2
         
-                    tfp.cd = K_J * Jp + K_T * Ti + K_D * tfp.d[-1] ** 2
-                    tfp.cv = K_J * Js + K_T * Ti + K_D * ds
-                    tfp.cf = K_LAT * tfp.cd + K_LON * tfp.cv 
+                #     tfp.cd = K_J * Jp + K_T * Ti + K_D * tfp.d[-1] ** 2
+                #     tfp.cv = K_J * Js + K_T * Ti + K_D * ds
+                #     tfp.cf = K_LAT * tfp.cd + K_LON * tfp.cv 
 
-                    frenet_paths.append(tfp)
+                #     frenet_paths.append(tfp)
 
         return frenet_paths
 

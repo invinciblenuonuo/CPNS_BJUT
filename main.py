@@ -41,7 +41,7 @@ class Qcar_State_Cartesian:
 #qcar控制量 分别为 油门、转向角、车灯
 qcar0=[0,0,False] 
 #全局车速
-global_car_speed=0.05
+global_car_speed=0.1
 #qcar状态变量
 qcar_state_cartesian = Qcar_State_Cartesian()
 #信号量
@@ -49,7 +49,7 @@ map_sig=False  #地图保存标识
 car_stop=False #停车标识
 get_state_stop=False#结束状态标志位
 #障碍物列表
-obs=[2.2, 0.803, 0.006]
+obs=[2.2, 1.03, 0.006]
 
 
 
@@ -327,7 +327,7 @@ def path_planning_task(qcar_state,path_queue,lock):
         #print('pathx=',path.x,'pathy=',path.y)
         if get_state_stop:
             break
-        time.sleep(0.08)
+        time.sleep(0.05)
 
 #控制函数
 def control_task(pal_car,qvl_car,control,path_queue,lock):
@@ -341,6 +341,7 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
     print("control task start!")
     pal_car.read_write_std(0, 0 ,control[2])
     last_valid_path=0
+    tx, ty, tyaw, tc, csp = map_process()
     while True:
         
         statue, location, rotation, scale = qvl_car.get_world_transform()
@@ -355,24 +356,24 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
         lock.release()    
         #print(qcar_state_cartesian.rotation[2])
         #从队列中获取规划好的路径
+
         if not path_queue.empty():
             path = path_queue.get_nowait() 
             if path!=None:
                 last_valid_path = path
-            #target_ind=0#如果路径重新规划了，则需要清零目标index
+            #如果路径重新规划了，则需要清零目标index
             pathsig=True
 
+        # lock.acquire()
+        # di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,tx,ty,target_ind)
+        # lock.release()
+        # pal_car.read_write_std(global_car_speed, di/pi ,control[2])
         if pathsig:
             lock.acquire()
             di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,last_valid_path.x,last_valid_path.y,target_ind)
-            #print(di)
             lock.release()
-            # if(di > 100):
-            #     di = 100
-            # elif(di<-100):
-            #     di = -100
             #控制信号输出
-            pal_car.read_write_std(0.05, di/pi ,control[2])
+            pal_car.read_write_std(global_car_speed, di/pi ,control[2])
 
         #print(path.x)        
         if get_state_stop:
@@ -380,8 +381,8 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
         time.sleep(0.01)
 
 class pure_pursuit:
-    k = 0.02    # 前视比例
-    Lfc = 0.35  # 前视距离
+    k = 0.06   # 前视比例
+    Lfc = 0.6  # 前视距离
     Kp = 1.0   # 速度比例
     dt = 0.1   # 
     L = 2.6  # 轴距  
@@ -406,7 +407,7 @@ class pure_pursuit:
         '寻找前视点'
 
         while Lf > L and (ind + 1) < len(cx): #如果最近的点与当前遍历到的点的距离小于前世距离就继续循环
-            dx = cx[ind + 1] - cx[ind]  #两点坐标相对距离
+            dx = cx[ind + 1] - cx[ind]        #两点坐标相对距离
             dy = cy[ind + 1] - cy[ind]  
             L += math.sqrt(pow(dx,2) + pow(dy,2)) #累加距离
             ind += 1 
@@ -505,15 +506,9 @@ def main():
     thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,path_queue,lock))
     thread_path_planning.start()
    
-    # thread_monitor=Thread(target=monitor_temp,args=(car,qcar,lock))
-    # thread_monitor.start()
-
-    # thread_mapping = Thread(target=mapping_task,args=(qcar,lock))
-    # thread_mapping.start()
-    #map_show(path_queue.get())
     keyboard.hook(callback)
     time.sleep(1)
-    #map_show()
+
     # 必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")
     QLabsRealTime().terminate_all_real_time_models()
