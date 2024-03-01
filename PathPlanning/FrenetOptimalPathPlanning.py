@@ -46,7 +46,7 @@ from PathPlanning.CubicSpline import cubic_spline_planner
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
 MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
 MAX_CURVATURE = 100.0  # maximum curvature [1/m]
-MAX_ROAD_WIDTH = 0.4 # maximum road width [m]
+MAX_ROAD_WIDTH = 0.3 # maximum road width [m]
 D_ROAD_W = 0.01  # road width sampling length [m]
 DT = 0.2  # time tick [s] 
 MAX_T = 5.0  # max prediction time [m]
@@ -138,7 +138,7 @@ class FrenetPathMethod:
     def calc_frenet_paths(self,c_speed, c_accel, c_d, c_d_d, c_d_dd, s0):
         frenet_paths = []
 
-        for di in np.arange(-0.1, MAX_ROAD_WIDTH, D_ROAD_W):
+        for di in np.arange(-0.03, MAX_ROAD_WIDTH, D_ROAD_W):
 
             # 横向运动规划
             for Ti in np.arange(MIN_T, MAX_T, DT): 

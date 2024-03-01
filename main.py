@@ -41,7 +41,7 @@ class Qcar_State_Cartesian:
 #qcar控制量 分别为 油门、转向角、车灯
 qcar0=[0,0,False] 
 #全局车速
-global_car_speed=0.1
+global_car_speed=0.06
 #qcar状态变量
 qcar_state_cartesian = Qcar_State_Cartesian()
 #信号量
@@ -49,7 +49,7 @@ map_sig=False  #地图保存标识
 car_stop=False #停车标识
 get_state_stop=False#结束状态标志位
 #障碍物列表
-obs=[2.2, 1.03, 0.006]
+obs=[2.2, 0.8, 0.006]
 
 
 
@@ -352,11 +352,14 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
             qcar_state_cartesian.location[i]=location[i]
             qcar_state_cartesian.rotation[i]=rotation[i]
             qcar_state_cartesian.acc[i]=pal_car.accelerometer[i]
+        #将车身坐标转到重心处
+        # qcar_state_cartesian.location[0] = qcar_state_cartesian.location[0]+0.128*cos(qcar_state_cartesian.rotation[2])
+        # qcar_state_cartesian.location[1] = qcar_state_cartesian.location[1]+0.128*sin(qcar_state_cartesian.rotation[2])
         qcar_state_cartesian.car_speed=pal_car.motorTach 
         lock.release()    
         #print(qcar_state_cartesian.rotation[2])
         #从队列中获取规划好的路径
-
+        print(qcar_state_cartesian.rotation[2])
         if not path_queue.empty():
             path = path_queue.get_nowait() 
             if path!=None:
@@ -364,28 +367,24 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
             #如果路径重新规划了，则需要清零目标index
             pathsig=True
 
-        # lock.acquire()
-        # di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,tx,ty,target_ind)
-        # lock.release()
-        # pal_car.read_write_std(global_car_speed, di/pi ,control[2])
         if pathsig:
             lock.acquire()
             di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,last_valid_path.x,last_valid_path.y,target_ind)
             lock.release()
             #控制信号输出
-            pal_car.read_write_std(global_car_speed, di/pi ,control[2])
-
-        #print(path.x)        
+            pal_car.read_write_std(global_car_speed, di ,control[2])
+        # pal_car.read_write_std(control[0], control[1] ,control[2])
+        #纵向控制不需要标定
         if get_state_stop:
             break
         time.sleep(0.01)
 
 class pure_pursuit:
-    k = 0.06   # 前视比例
-    Lfc = 0.6  # 前视距离
+    k = 0.1   # 前视比例
+    Lfc = 0.4  # 前视距离
     Kp = 1.0   # 速度比例
     dt = 0.1   # 
-    L = 2.6  # 轴距  
+    L = 0.256  # 轴距  
     
     def calc_target_index(self,state, cx, cy):
 
@@ -514,8 +513,6 @@ def main():
     QLabsRealTime().terminate_all_real_time_models()
     print("shutdown")
     get_state_stop=True
-
-
 
 
 if __name__ == '__main__':
