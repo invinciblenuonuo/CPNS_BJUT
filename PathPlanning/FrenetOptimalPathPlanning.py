@@ -1,23 +1,8 @@
-"""
-
-Frenet optimal trajectory generator
-
-author: Atsushi Sakai (@Atsushi_twi)
-
-Ref:
-
-- [Optimal Trajectory Generation for Dynamic Street Scenarios in a Frenet Frame]
-(https://www.researchgate.net/profile/Moritz_Werling/publication/224156269_Optimal_Trajectory_Generation_for_Dynamic_Street_Scenarios_in_a_Frenet_Frame/links/54f749df0cf210398e9277af.pdf)
-
-- [Optimal trajectory generation for dynamic street scenarios in a Frenet Frame]
-(https://www.youtube.com/watch?v=Cj6tAQe7UCY)
-
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
 import math
+from math import *
 import sys
 import pathlib
 sys.path.append(str(pathlib.Path(__file__).parent.parent))
@@ -27,20 +12,6 @@ from PathPlanning.QuinticPolynomialsPlanner.quintic_polynomials_planner import \
 from PathPlanning.CubicSpline import cubic_spline_planner
 
 
-
-# Parameter
-# MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
-# MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
-# MAX_CURVATURE = 10.0  # maximum curvature [1/m]
-# MAX_ROAD_WIDTH = 7.0  # maximum road width [m]
-# D_ROAD_W = 1.0  # road width sampling length [m]
-# DT = 0.02  # time tick [s] 
-# MAX_T = 5.0  # max prediction time [m]
-# MIN_T = 4.0  # min prediction time [m]
-# TARGET_SPEED = 30.0 / 3.6  # target speed [m/s]
-# D_T_S = 5.0 / 3.6  # target speed sampling length [m/s]
-# N_S_SAMPLE = 1  # sampling number of target speed
-# ROBOT_RADIUS = 2.0  # robot radius [m]
 
 # Parameter
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
@@ -135,6 +106,74 @@ class FrenetPathMethod:
     def __init__(self):
         self.state =1
 
+
+    #笛卡尔坐标系转frenet坐标系
+    # rs,rx,ry,rtheta,rkappa 为参考点的参数
+    # x,y,v,theta            为当前车的参数
+    # 返回参数 s[0]:s  s[1]:s'  
+    def cartesian_to_frenet2D(self,rs, rx, ry, rtheta, rkappa, x, y, v, theta):
+        s_condition = np.zeros(2)
+        d_condition = np.zeros(2)
+        
+        dx = x - rx
+        dy = y - ry
+        
+        cos_theta_r = cos(rtheta)
+        sin_theta_r = sin(rtheta)
+        
+        cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
+        d_condition[0] = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
+        delta_theta = theta - rtheta
+        tan_delta_theta = tan(delta_theta)
+        cos_delta_theta = cos(delta_theta)
+        
+        one_minus_kappa_r_d = 1 - rkappa * d_condition[0]
+        d_condition[1] = one_minus_kappa_r_d * tan_delta_theta
+        
+        
+        s_condition[0] = rs 
+        s_condition[1] = v * cos_delta_theta / one_minus_kappa_r_d
+
+        return s_condition, d_condition 
+    
+
+    def cartesian_to_frenet3D(self,rs, rx, ry, rtheta, rkappa, rdkappa, x, y, v, a, theta, kappa):
+        s_condition = np.zeros(3)
+        d_condition = np.zeros(3)
+        
+        dx = x - rx
+        dy = y - ry
+        
+        cos_theta_r = cos(rtheta)
+        sin_theta_r = sin(rtheta)
+        
+        cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
+        d_condition[0] = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
+        
+        delta_theta = theta - rtheta
+        tan_delta_theta = tan(delta_theta)
+        cos_delta_theta = cos(delta_theta)
+        
+        one_minus_kappa_r_d = 1 - rkappa * d_condition[0]
+        d_condition[1] = one_minus_kappa_r_d * tan_delta_theta
+        
+        kappa_r_d_prime = rdkappa * d_condition[0] + rkappa * d_condition[1]
+        
+        d_condition[2] = (-kappa_r_d_prime * tan_delta_theta + 
+        one_minus_kappa_r_d / cos_delta_theta / cos_delta_theta *
+            (kappa * one_minus_kappa_r_d / cos_delta_theta - rkappa))
+        
+        s_condition[0] = rs
+        s_condition[1] = v * cos_delta_theta / one_minus_kappa_r_d
+        
+        delta_theta_prime = one_minus_kappa_r_d / cos_delta_theta * kappa - rkappa
+        s_condition[2] = ((a * cos_delta_theta -
+                        s_condition[1] * s_condition[1] *
+                        (d_condition[1] * delta_theta_prime - kappa_r_d_prime)) /
+                            one_minus_kappa_r_d)
+        return s_condition, d_condition
+
+
     def calc_frenet_paths(self,c_speed, c_accel, c_d, c_d_d, c_d_dd, s0):
         frenet_paths = []
 
@@ -208,13 +247,12 @@ class FrenetPathMethod:
                 fp.x.append(fx)
                 fp.y.append(fy)
 
-            # # calc yaw and ds
-            # for i in range(len(fp.x) - 1):
-            #     dx = fp.x[i + 1] - fp.x[i]
-            #     dy = fp.y[i + 1] - fp.y[i]
-            #     fp.yaw.append(math.atan2(dy, dx))
+            # calc yaw and ds
+            for i in range(len(fp.x) - 1):
+                dx = fp.x[i + 1] - fp.x[i]
+                dy = fp.y[i + 1] - fp.y[i]
+                fp.yaw.append(np.arctan2(dy, dx))
             #     fp.ds.append(math.hypot(dx, dy))
-
             # fp.yaw.append(fp.yaw[-1])
             # fp.ds.append(fp.ds[-1])
 

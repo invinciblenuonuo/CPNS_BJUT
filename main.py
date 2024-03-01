@@ -30,6 +30,9 @@ import numpy as np
 from pandas import DataFrame 
 
 from PathPlanning.FrenetOptimalPathPlanning import FrenetPathMethod
+from pathtracking.PurePursuit import pure_pursuit
+from pathtracking.StanleyController import stanley_controller
+from scipy.interpolate import splprep,splev
 
 class Qcar_State_Cartesian:
     def __init__(self):
@@ -41,7 +44,7 @@ class Qcar_State_Cartesian:
 #qcar控制量 分别为 油门、转向角、车灯
 qcar0=[0,0,False] 
 #全局车速
-global_car_speed=0.06
+global_car_speed=0.12
 #qcar状态变量
 qcar_state_cartesian = Qcar_State_Cartesian()
 #信号量
@@ -49,7 +52,7 @@ map_sig=False  #地图保存标识
 car_stop=False #停车标识
 get_state_stop=False#结束状态标志位
 #障碍物列表
-obs=[2.2, 0.8, 0.006]
+obs=[2.8, 0.8, 0.006]
 
 
 
@@ -103,7 +106,9 @@ def map_show():
     y = [-1.0628145451023905, -1.0474440418463833, -1.003490472806171, -0.9431252417977816, -0.876514287611952, -0.8106720884901806, -0.7524173876906353, -0.7056426448421043, -0.6742553929454941, -0.6598994968549474, -0.6612854891603108, -0.6778799626977008, -0.7057088524840394, -0.7382674342421898, -0.7734851395311872, -0.8071344077636791, -0.8352427509770975, -0.8464660822234932, -0.8380039955715467, -0.7930563177088074, -0.7128064208620624, -0.5995271756940493, -0.4648666958561655]
     plt.scatter(x,y,marker='.', color='red')
     plt.show()
-    
+
+
+
 def mapshow_task(queue,lock):
     tx, ty, tyaw, tc, csp=map_process()
     time.sleep(2)
@@ -188,75 +193,6 @@ def find_proper_point(xc,yc,xlist,ylist,csp):
 
 
 
-#笛卡尔坐标系转frenet坐标系
-# rs,rx,ry,rtheta,rkappa 为参考点的参数
-# x,y,v,theta            为当前车的参数
-# 返回参数 s[0]:s  s[1]:s'  
-def cartesian_to_frenet2D(rs, rx, ry, rtheta, rkappa, x, y, v, theta):
-    s_condition = np.zeros(2)
-    d_condition = np.zeros(2)
-    
-    dx = x - rx
-    dy = y - ry
-    
-    cos_theta_r = cos(rtheta)
-    sin_theta_r = sin(rtheta)
-    
-    cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
-    d_condition[0] = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
-    
-    delta_theta = theta - rtheta
-    tan_delta_theta = tan(delta_theta)
-    cos_delta_theta = cos(delta_theta)
-    
-    one_minus_kappa_r_d = 1 - rkappa * d_condition[0]
-    d_condition[1] = one_minus_kappa_r_d * tan_delta_theta
-    
-    
-    s_condition[0] = rs 
-    s_condition[1] = v * cos_delta_theta / one_minus_kappa_r_d
-
-    return s_condition, d_condition 
-
-
-
-def cartesian_to_frenet3D(rs, rx, ry, rtheta, rkappa, rdkappa, x, y, v, a, theta, kappa):
-    s_condition = np.zeros(3)
-    d_condition = np.zeros(3)
-    
-    dx = x - rx
-    dy = y - ry
-    
-    cos_theta_r = cos(rtheta)
-    sin_theta_r = sin(rtheta)
-    
-    cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
-    d_condition[0] = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
-    
-    delta_theta = theta - rtheta
-    tan_delta_theta = tan(delta_theta)
-    cos_delta_theta = cos(delta_theta)
-    
-    one_minus_kappa_r_d = 1 - rkappa * d_condition[0]
-    d_condition[1] = one_minus_kappa_r_d * tan_delta_theta
-    
-    kappa_r_d_prime = rdkappa * d_condition[0] + rkappa * d_condition[1]
-    
-    d_condition[2] = (-kappa_r_d_prime * tan_delta_theta + 
-      one_minus_kappa_r_d / cos_delta_theta / cos_delta_theta *
-          (kappa * one_minus_kappa_r_d / cos_delta_theta - rkappa))
-    
-    s_condition[0] = rs
-    s_condition[1] = v * cos_delta_theta / one_minus_kappa_r_d
-    
-    delta_theta_prime = one_minus_kappa_r_d / cos_delta_theta * kappa - rkappa
-    s_condition[2] = ((a * cos_delta_theta -
-                       s_condition[1] * s_condition[1] *
-                       (d_condition[1] * delta_theta_prime - kappa_r_d_prime)) /
-                          one_minus_kappa_r_d)
-    return s_condition, d_condition
-
-
 #路径规划函数
 def path_planning_task(qcar_state,path_queue,lock):
     tx, ty, tyaw, tc, csp = map_process()
@@ -268,6 +204,7 @@ def path_planning_task(qcar_state,path_queue,lock):
     time.sleep(1) #此处的延时是因为如果之间启动任务会导致qcar的初始位置获取错误
     print("planning task start!")
     while True:
+        #获取车辆的状态信息
         lock.acquire()
         c_x=qcar_state_cartesian.location[0]
         c_y=qcar_state_cartesian.location[1]
@@ -282,19 +219,20 @@ def path_planning_task(qcar_state,path_queue,lock):
         proper_s,proper_x,proper_y,proper_theta,proper_kappa,proper_dkappa=find_proper_point(c_x, c_y, tx, ty , csp)
 
         #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
-        c_s,c_l = cartesian_to_frenet3D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, proper_dkappa, 
-                              c_x, c_y, c_speed, c_a , c_theta , c_carkappa )
-        #print(c_l[0])
-        #print('s=',c_s,'l=',c_l)
+        # c_s,c_l = PathMethod.cartesian_to_frenet3D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, proper_dkappa, 
+        #                       c_x, c_y, c_speed, c_a , c_theta , c_carkappa )
+        c_s,c_l = PathMethod.cartesian_to_frenet2D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, 
+                              c_x, c_y, c_speed, c_theta)
 
         qcar_state.s0 = c_s[0]
         qcar_state.c_speed = c_s[1]
-        qcar_state.c_accel = c_s[2]
-
+        qcar_state.c_accel = 0
         qcar_state.c_d = c_l[0]
         qcar_state.c_d_d =  0
         qcar_state.c_d_dd = 0
+
         #求导数和二阶导的算法存在问题
+
         global obs
         qcar_state.ob = np.array([
                                   [obs[0],obs[1]],
@@ -304,8 +242,9 @@ def path_planning_task(qcar_state,path_queue,lock):
         # 输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
         # 尝试更改 只输出x，y序列，不输出 k，yaw  使用pure控制算法
         path = PathMethod.frenet_optimal_planning(
-        csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
-        qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
+                                        csp, qcar_state.s0 , qcar_state.c_speed, qcar_state.c_accel, 
+                                        qcar_state.c_d, qcar_state.c_d_d, qcar_state.c_d_dd, qcar_state.ob)
+        
         if path != None:
             save_path(path)
         path_queue.put(path)
@@ -329,6 +268,7 @@ def path_planning_task(qcar_state,path_queue,lock):
             break
         time.sleep(0.05)
 
+
 #控制函数
 def control_task(pal_car,qvl_car,control,path_queue,lock):
     global get_state_stopk
@@ -337,6 +277,7 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
     count=0
     target_ind=0
     purepursuit = pure_pursuit()
+    Stanleycontrol=stanley_controller()
     pathsig=False
     print("control task start!")
     pal_car.read_write_std(0, 0 ,control[2])
@@ -352,93 +293,42 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
             qcar_state_cartesian.location[i]=location[i]
             qcar_state_cartesian.rotation[i]=rotation[i]
             qcar_state_cartesian.acc[i]=pal_car.accelerometer[i]
+        qcar_state_cartesian.car_speed=pal_car.motorTach 
         #将车身坐标转到重心处
         # qcar_state_cartesian.location[0] = qcar_state_cartesian.location[0]+0.128*cos(qcar_state_cartesian.rotation[2])
-        # qcar_state_cartesian.location[1] = qcar_state_cartesian.location[1]+0.128*sin(qcar_state_cartesian.rotation[2])
-        qcar_state_cartesian.car_speed=pal_car.motorTach 
+        # qcar_state_cartesian.location[1] = qcar_state_cartesian.location[1]+0.128*sin(qcar_state_cartesian.rotation[2])    
         lock.release()    
-        #print(qcar_state_cartesian.rotation[2])
-        #从队列中获取规划好的路径
-        print(qcar_state_cartesian.rotation[2])
+
         if not path_queue.empty():
             path = path_queue.get_nowait() 
             if path!=None:
-                last_valid_path = path
-            #如果路径重新规划了，则需要清零目标index
+                last_valid_path = path #如果规划失败，需要使用上一次生成的路径
             pathsig=True
 
         if pathsig:
             lock.acquire()
-            di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,last_valid_path.x,last_valid_path.y,target_ind)
+            #di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,last_valid_path.x,last_valid_path.y,target_ind)
+            di,target_ind = Stanleycontrol.stanley_control(qcar_state_cartesian,
+                                                               last_valid_path.x,
+                                                               last_valid_path.y,
+                                                               last_valid_path.yaw,
+                                                               target_ind)
+            # di,target_ind = Stanleycontrol.stanley_control(qcar_state_cartesian,
+            #                                                    tx,
+            #                                                    ty,
+            #                                                    tyaw,
+            #                                                    target_ind)
+
             lock.release()
             #控制信号输出
             pal_car.read_write_std(global_car_speed, di ,control[2])
-        # pal_car.read_write_std(control[0], control[1] ,control[2])
+        
+        #pal_car.read_write_std(control[0], control[1] ,control[2]) #使用键盘控制
         #纵向控制不需要标定
         if get_state_stop:
             break
         time.sleep(0.01)
 
-class pure_pursuit:
-    k = 0.1   # 前视比例
-    Lfc = 0.4  # 前视距离
-    Kp = 1.0   # 速度比例
-    dt = 0.1   # 
-    L = 0.256  # 轴距  
-    
-    def calc_target_index(self,state, cx, cy):
-
-        '寻找最近的点'
-        #遍历所有点，将到所有点到当前车坐标的距离保存
-        dx = [state.location[0] - icx for icx in cx]
-        dy = [state.location[1] - icy for icy in cy]
-
-        #计算距离
-        d = [abs(math.sqrt(idx ** 2 + idy ** 2)) for (idx, idy) in zip(dx, dy)]
-
-        #寻找最近的点的序号
-        ind = d.index(min(d))
-
-        L = 0.0
-
-        Lf = self.Lfc + self.k*state.car_speed
-
-        '寻找前视点'
-
-        while Lf > L and (ind + 1) < len(cx): #如果最近的点与当前遍历到的点的距离小于前世距离就继续循环
-            dx = cx[ind + 1] - cx[ind]        #两点坐标相对距离
-            dy = cy[ind + 1] - cy[ind]  
-            L += math.sqrt(pow(dx,2) + pow(dy,2)) #累加距离
-            ind += 1 
-
-        return ind
-
-
-    def pure_pursuit_control(self, state, cx, cy, pind):
-
-        ind = self.calc_target_index(state, cx, cy)
-
-        # if pind >= ind:
-        #     ind = pind
-
-        if ind < len(cx):
-            tx = cx[ind]
-            ty = cy[ind]
-        else:
-            tx = cx[-1]
-            ty = cy[-1]
-            ind = len(cx) - 1
-
-        alpha = math.atan2(ty - state.location[1], tx - state.location[0]) - state.rotation[2]
-
-        if state.car_speed < 0:  # back
-            alpha = math.pi - alpha
-
-        Lf = self.Lfc + self.k*state.car_speed
-
-        delta = math.atan2(2.0 * self.L * math.sin(alpha) / Lf, 1.0)
-
-        return delta, ind
 
 
 class path_state:
