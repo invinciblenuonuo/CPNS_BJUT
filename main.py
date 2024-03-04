@@ -64,10 +64,6 @@ def callback(sign):
     if sign.event_type == 'down' and sign.name == 'esc':
         global get_state_stop
         get_state_stop=True
-    if sign.event_type == 'down' and sign.name == 'p':
-        print("press p")
-        global car_stop
-        car_stop=not car_stop
     if sign.event_type == 'down' and sign.name == 'up':
         qcar0[0]=global_car_speed
     if sign.event_type == 'down' and sign.name == 'down':
@@ -225,10 +221,9 @@ def path_planning_task(qcar_state,path_queue,lock):
 
         #寻找匹配点
         proper_s,proper_x,proper_y,proper_theta,proper_kappa,proper_dkappa=find_proper_point(c_x, c_y, tx, ty , csp)
+        
 
         #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
-        # c_s,c_l = PathMethod.cartesian_to_frenet3D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, proper_dkappa, 
-        #                       c_x, c_y, c_speed, c_a , c_theta , c_carkappa )
         c_s,c_l = PathMethod.cartesian_to_frenet2D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, 
                               c_x, c_y, c_speed, c_theta)
 
@@ -238,8 +233,6 @@ def path_planning_task(qcar_state,path_queue,lock):
         qcar_state.c_d = c_l[0]
         qcar_state.c_d_d =  0
         qcar_state.c_d_dd = 0
-
-        #求导数和二阶导的算法存在问题
 
         global obs
         qcar_state.ob = np.array([
@@ -264,14 +257,6 @@ def path_planning_task(qcar_state,path_queue,lock):
         # qcar_state.c_speed = path.s_d[1]
         # qcar_state.c_accel = path.s_dd[1]
 
-        # print("rs0:",c_s[0],"s0=",path.s[1])
-        # print("rc_speed:",c_s[1],"c_speed=",path.s_d[1])
-        # print("rc_accel:",c_s[2],"c_accel=",path.s_dd[1])
-        # print("rc_d:",c_l[1],"c_d=",path.d[1])
-        # print("rc_d_d:",c_l[2],"s0=",path.d_d[1])
-        # print("rc_d_dd:",c_l[0],"s0=",path.d_dd[1])
-
-        #print('pathx=',path.x,'pathy=',path.y)
         if get_state_stop:
             break
         time.sleep(0.05)
@@ -279,19 +264,25 @@ def path_planning_task(qcar_state,path_queue,lock):
 
 
 #控制函数
-def control_task(pal_car,qvl_car,control,path_queue,lock):
+def control_task(pal_car,qvl_car,control,path_queue,state,lock):
     global get_state_stopk
     global map_sig
     global qcar_state_cartesian
+    global car_stop
+
     count=0
     target_ind=0
     di=0
+    last_valid_path=0
+    pathsig=False
+    stop1=False
+    stop2=False
+    car_speed = global_car_speed
+    
     purepursuit = pure_pursuit()
     Stanleycontrol=stanley_controller()
-    pathsig=False
     print("control task start!")
     pal_car.read_write_std(0, 0 ,control[2])
-    last_valid_path=0
     tx, ty, tyaw, tc, csp = map_process()
     while True:
         
@@ -305,11 +296,7 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
             qcar_state_cartesian.acc[i]=pal_car.accelerometer[i]
             qcar_state_cartesian.gyro[i]=pal_car.gyroscope[i]
         qcar_state_cartesian.car_speed=pal_car.motorTach 
-        #将车身坐标转到重心处
-        # qcar_state_cartesian.location[0] = qcar_state_cartesian.location[0]+0.128*cos(qcar_state_cartesian.rotation[2])
-        # qcar_state_cartesian.location[1] = qcar_state_cartesian.location[1]+0.128*sin(qcar_state_cartesian.rotation[2])    
         lock.release()    
-
         if not path_queue.empty():
             path = path_queue.get_nowait() 
             if path!=None:
@@ -326,14 +313,35 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
                                                                last_valid_path.c,
                                                                target_ind,
                                                                di)
-            # di,target_ind = Stanleycontrol.stanley_control(qcar_state_cartesian,
-            #                                                    tx,
-            #                                                    ty,
-            #                                                    tyaw,
-            #                                                    target_ind)
             lock.release()
             #控制信号输出
-            pal_car.read_write_std(global_car_speed, di ,control[2])
+        #3.95  trafficlight
+        #6.85  stop1
+        #11.20 stop2
+        #15.90 finish
+
+            if not stop1:
+                if state.s0 > 6.60:
+                    car_stop = True
+                    stop1 = True
+
+            if not stop2:
+                if state.s0 > 10.85:
+                    car_stop = True
+                    stop2 = True
+
+            if car_stop:
+                if count < 100:
+                    count=count+1
+                    car_speed = 0
+                else:
+                    count = 0
+                    car_speed = global_car_speed
+                    car_stop = False
+
+            if state.s0 > 15.60:
+                car_speed = 0
+            pal_car.read_write_std(car_speed, di ,control[2])
         
         #pal_car.read_write_std(control[0], control[1] ,control[2]) #使用键盘控制
         #纵向控制不需要标定
@@ -394,6 +402,17 @@ def main():
     #qvl链接官方qcar
     qcar = QLabsQCar(qlabs)
     qcar.actorNumber=0
+    x_offset = 0.06
+    y_offset = 1.75
+    qcar.set_transform_and_request_state(location=[-1.335+ x_offset, -2.5+ y_offset, 0.005], 
+                                    rotation=[0, 0, -pi/4], 
+                                    enableDynamics = True, 
+                                    headlights = False, 
+                                    leftTurnSignal = False, 
+                                    rightTurnSignal = False, 
+                                    brakeSignal = False, 
+                                    reverseSignal = False,
+                                    waitForConfirmation=True)
     lock = Lock()
     global qcar0
     global get_state_stop
@@ -403,7 +422,7 @@ def main():
     #使用FIFO队列进行线程之间的通信
     path_queue = Queue(maxsize=10)
 
-    thread_control = Thread(target=control_task,args=(car,qcar,qcar0,path_queue,lock))
+    thread_control = Thread(target=control_task,args=(car,qcar,qcar0,path_queue,qcar_path_state,lock))
     thread_control.start()
 
     thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,path_queue,lock))
@@ -414,7 +433,7 @@ def main():
 
     # 必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")
-    QLabsRealTime().terminate_all_real_time_models()
+    #QLabsRealTime().terminate_all_real_time_models()
     print("shutdown")
     get_state_stop=True
 
