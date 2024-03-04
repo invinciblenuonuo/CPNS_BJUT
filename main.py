@@ -44,7 +44,7 @@ class Qcar_State_Cartesian:
 #qcar控制量 分别为 油门、转向角、车灯
 qcar0=[0,0,False] 
 #全局车速
-global_car_speed=0.12
+global_car_speed=0.08
 #qcar状态变量
 qcar_state_cartesian = Qcar_State_Cartesian()
 #信号量
@@ -52,8 +52,7 @@ map_sig=False  #地图保存标识
 car_stop=False #停车标识
 get_state_stop=False#结束状态标志位
 #障碍物列表
-obs=[2.8, 0.8, 0.006]
-
+obs=[2.2, 0.8, 0.006]
 
 
 #键盘回调函数
@@ -318,7 +317,6 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
             #                                                    ty,
             #                                                    tyaw,
             #                                                    target_ind)
-
             lock.release()
             #控制信号输出
             pal_car.read_write_std(global_car_speed, di ,control[2])

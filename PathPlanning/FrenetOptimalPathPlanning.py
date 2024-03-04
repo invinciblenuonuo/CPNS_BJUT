@@ -33,7 +33,7 @@ K_T = 0.1
 K_D = 4.0
 K_LAT = 1.0
 K_LON = 1.0
-
+K_OB = 0.5
 show_animation = True
 
 #五次多项式
@@ -93,7 +93,7 @@ class FrenetPath:
         self.cd = 0.0
         self.cv = 0.0
         self.cf = 0.0
-
+        self.cb = 0.0
         self.x = []
         self.y = []
         self.yaw = []
@@ -174,10 +174,10 @@ class FrenetPathMethod:
         return s_condition, d_condition
 
 
-    def calc_frenet_paths(self,c_speed, c_accel, c_d, c_d_d, c_d_dd, s0):
+    def calc_frenet_paths(self,c_speed, c_accel, c_d, c_d_d, c_d_dd, s0 ):
         frenet_paths = []
 
-        for di in np.arange(-0.03, MAX_ROAD_WIDTH, D_ROAD_W):
+        for di in np.arange(-0.02, MAX_ROAD_WIDTH, D_ROAD_W):
 
             # 横向运动规划
             for Ti in np.arange(MIN_T, MAX_T, DT): 
@@ -232,9 +232,10 @@ class FrenetPathMethod:
         return frenet_paths
 
 
-    def calc_global_paths(self,fplist, csp):
+    def calc_global_paths(self,fplist, csp , ob):
+        
         for fp in fplist:
-
+            d_barrier = []
             # calc global positions
             for i in range(len(fp.s)):
                 ix, iy = csp.calc_position(fp.s[i])
@@ -242,16 +243,30 @@ class FrenetPathMethod:
                     break
                 i_yaw = csp.calc_yaw(fp.s[i])
                 di = fp.d[i]
-                fx = ix + di * math.cos(i_yaw + math.pi / 2.0)
-                fy = iy + di * math.sin(i_yaw + math.pi / 2.0)
+                fx = ix + di * np.cos(i_yaw + np.pi / 2.0)
+                fy = iy + di * np.sin(i_yaw + np.pi / 2.0)
                 fp.x.append(fx)
                 fp.y.append(fy)
-
+    
             # calc yaw and ds
             for i in range(len(fp.x) - 1):
                 dx = fp.x[i + 1] - fp.x[i]
                 dy = fp.y[i + 1] - fp.y[i]
                 fp.yaw.append(np.arctan2(dy, dx))
+
+            for i in range(len(fp.x) - 1):
+                d_barrier.append( np.sqrt((fp.x[i] - ob[0,0])**2 + (fp.y[i] - ob[0,1])**2) )
+
+            d_barrier = np.array(d_barrier)
+            maxindex = np.argmin(d_barrier)
+            if d_barrier[maxindex] > 0.5:
+                fp.cb = 0.0
+            else:
+                fp.cb = np.sum(d_barrier)
+            fp.cf = fp.cf - K_OB*fp.cb
+                
+            #print('cb = ' , K_OB*fp.cb,K_LAT * fp.cd,K_LON * fp.cv)
+
             #     fp.ds.append(math.hypot(dx, dy))
             # fp.yaw.append(fp.yaw[-1])
             # fp.ds.append(fp.ds[-1])
@@ -303,8 +318,8 @@ class FrenetPathMethod:
     def frenet_optimal_planning(self,csp, s0, c_speed, c_accel, c_d, c_d_d, c_d_dd, ob):
         #计算frenet坐标系下的路径
         fplist = self.calc_frenet_paths(c_speed, c_accel, c_d, c_d_d, c_d_dd, s0)
-        fplist = self.calc_global_paths(fplist, csp)
-        fplist = self.check_paths(fplist, ob)
+        fplist = self.calc_global_paths(fplist, csp,ob)
+        #fplist = self.check_paths(fplist, ob)
 
         # find minimum cost path
         min_cost = float("inf")
@@ -313,7 +328,6 @@ class FrenetPathMethod:
             if min_cost >= fp.cf:
                 min_cost = fp.cf
                 best_path = fp
-
         return best_path
 
 
