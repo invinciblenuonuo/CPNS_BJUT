@@ -253,13 +253,21 @@ class FrenetPathMethod:
                 dx = fp.x[i + 1] - fp.x[i]
                 dy = fp.y[i + 1] - fp.y[i]
                 fp.yaw.append(np.arctan2(dy, dx))
+                fp.ds.append(np.hypot(dx,dy))
+            fp.yaw.append(fp.yaw[-1])
+            fp.ds.append(fp.ds[-1])
+            for i in range(len(fp.yaw) - 1):
+                fp.c.append((fp.yaw[i + 1] - fp.yaw[i]) / fp.ds[i])
+
+            
+
 
             for i in range(len(fp.x) - 1):
                 d_barrier.append( np.sqrt((fp.x[i] - ob[0,0])**2 + (fp.y[i] - ob[0,1])**2) )
 
             d_barrier = np.array(d_barrier)
             maxindex = np.argmin(d_barrier)
-            if d_barrier[maxindex] > 0.5:
+            if d_barrier[maxindex] > 0.8:
                 fp.cb = 0.0
             else:
                 fp.cb = np.sum(d_barrier)

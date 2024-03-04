@@ -40,11 +40,12 @@ class Qcar_State_Cartesian:
         self.rotation=[0,0,0]
         self.car_speed=0
         self.acc=[0,0,0]
+        self.gyro=[0,0,0]
 
 #qcar控制量 分别为 油门、转向角、车灯
 qcar0=[0,0,False] 
 #全局车速
-global_car_speed=0.08
+global_car_speed=0.15
 #qcar状态变量
 qcar_state_cartesian = Qcar_State_Cartesian()
 #信号量
@@ -80,6 +81,8 @@ def callback(sign):
     if sign.event_type == 'up' and (sign.name == 'left' or sign.name == 'right'):
         qcar0[1]=0
 
+
+
 #地图处理函数
 def map_process():
     with open("./data/globalmap.txt", 'r') as f:
@@ -94,8 +97,9 @@ def map_process():
     print("load succcessful")
     tx, ty, tyaw, tc, csp = FrenetPathMethod.generate_target_course(process_x,process_y)
     f.close
-    
     return tx, ty, tyaw, tc, csp
+
+
 
 #地图展示
 def map_show():
@@ -142,11 +146,14 @@ def mapping_task(qcar , lock):
             break
         time.sleep(0.05)
 
+
+
 def save_path(path):
     with open("./data/path.txt", 'a') as f:
         f.write(str(path.x)+'|'+str(path.y)+'\n')
     f.close
    
+
 
 #车辆状态监控任务
 def monitor_temp(car,qcar,lock):
@@ -162,6 +169,7 @@ def monitor_temp(car,qcar,lock):
         if get_state_stop:
             break
         time.sleep(0.1)
+
 
 
 last_point=0
@@ -189,6 +197,7 @@ def find_proper_point(xc,yc,xlist,ylist,csp):
     #print('xlist=',xlist[proper_index],'ylist=', ylist[proper_index])
     #print(proper_index)
     return proper_s,proper_x,proper_y,proper_theta,proper_kappa,proper_dkappa
+
 
 
 
@@ -268,6 +277,7 @@ def path_planning_task(qcar_state,path_queue,lock):
         time.sleep(0.05)
 
 
+
 #控制函数
 def control_task(pal_car,qvl_car,control,path_queue,lock):
     global get_state_stopk
@@ -275,6 +285,7 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
     global qcar_state_cartesian
     count=0
     target_ind=0
+    di=0
     purepursuit = pure_pursuit()
     Stanleycontrol=stanley_controller()
     pathsig=False
@@ -292,6 +303,7 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
             qcar_state_cartesian.location[i]=location[i]
             qcar_state_cartesian.rotation[i]=rotation[i]
             qcar_state_cartesian.acc[i]=pal_car.accelerometer[i]
+            qcar_state_cartesian.gyro[i]=pal_car.gyroscope[i]
         qcar_state_cartesian.car_speed=pal_car.motorTach 
         #将车身坐标转到重心处
         # qcar_state_cartesian.location[0] = qcar_state_cartesian.location[0]+0.128*cos(qcar_state_cartesian.rotation[2])
@@ -311,7 +323,9 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
                                                                last_valid_path.x,
                                                                last_valid_path.y,
                                                                last_valid_path.yaw,
-                                                               target_ind)
+                                                               last_valid_path.c,
+                                                               target_ind,
+                                                               di)
             # di,target_ind = Stanleycontrol.stanley_control(qcar_state_cartesian,
             #                                                    tx,
             #                                                    ty,
@@ -329,6 +343,7 @@ def control_task(pal_car,qvl_car,control,path_queue,lock):
 
 
 
+
 class path_state:
     def __init__(self):
         self.ob = np.array([
@@ -342,6 +357,7 @@ class path_state:
         self.c_d_d = 0.0  
         self.c_d_dd = 0.0  
         self.s0 = 0.0  
+
 
 
 def main():
