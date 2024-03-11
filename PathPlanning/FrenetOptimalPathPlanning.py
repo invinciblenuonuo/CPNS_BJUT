@@ -177,7 +177,7 @@ class FrenetPathMethod:
     def calc_frenet_paths(self,c_speed, c_accel, c_d, c_d_d, c_d_dd, s0 ):
         frenet_paths = []
 
-        for di in np.arange(-0.02, MAX_ROAD_WIDTH, D_ROAD_W):
+        for di in np.arange(0.00, MAX_ROAD_WIDTH, D_ROAD_W):
 
             # 横向运动规划
             for Ti in np.arange(MIN_T, MAX_T, DT): 
@@ -257,7 +257,14 @@ class FrenetPathMethod:
             fp.yaw.append(fp.yaw[-1])
             fp.ds.append(fp.ds[-1])
             for i in range(len(fp.yaw) - 1):
-                fp.c.append((fp.yaw[i + 1] - fp.yaw[i]) / fp.ds[i])
+                e = fp.yaw[i + 1] - fp.yaw[i]
+                if abs(e) > 3.15:
+                    if fp.yaw[i + 1] < 0:
+                        e = 2*np.pi+fp.yaw[i + 1] - fp.yaw[i]
+                    elif fp.yaw[i] < 0:
+                        e = fp.yaw[i + 1] - (2*np.pi+fp.yaw[i])
+                 
+                fp.c.append( e / fp.ds[i])
 
             
 

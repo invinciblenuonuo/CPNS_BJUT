@@ -222,7 +222,6 @@ def path_planning_task(qcar_state,path_queue,lock):
         #寻找匹配点
         proper_s,proper_x,proper_y,proper_theta,proper_kappa,proper_dkappa=find_proper_point(c_x, c_y, tx, ty , csp)
         
-
         #计算当前qcar从笛卡尔坐标系到frenet坐标系转换后的s和l
         c_s,c_l = PathMethod.cartesian_to_frenet2D(proper_s, proper_x, proper_y, proper_theta, proper_kappa, 
                               c_x, c_y, c_speed, c_theta)
@@ -277,7 +276,6 @@ def control_task(pal_car,qvl_car,control,path_queue,state,lock):
     pathsig=False
     stop1=False
     stop2=False
-    car_speed = global_car_speed
     
     purepursuit = pure_pursuit()
     Stanleycontrol=stanley_controller()
@@ -287,7 +285,6 @@ def control_task(pal_car,qvl_car,control,path_queue,state,lock):
     while True:
         
         statue, location, rotation, scale = qvl_car.get_world_transform()
-        
         #获取转速到车速
         lock.acquire()
         for i in range(3):
@@ -297,13 +294,17 @@ def control_task(pal_car,qvl_car,control,path_queue,state,lock):
             qcar_state_cartesian.gyro[i]=pal_car.gyroscope[i]
         qcar_state_cartesian.car_speed=pal_car.motorTach 
         lock.release()    
-        if not path_queue.empty():
+        if not path_queue.empty():     
             path = path_queue.get_nowait() 
             if path!=None:
                 last_valid_path = path #如果规划失败，需要使用上一次生成的路径
             pathsig=True
-
+        
         if pathsig:
+            k_total=0
+            for k in last_valid_path.c:
+                k_total +=  abs(k)
+            #print(k_total)
             lock.acquire()
             #di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,last_valid_path.x,last_valid_path.y,target_ind)
             di,target_ind = Stanleycontrol.stanley_control(qcar_state_cartesian,
@@ -315,18 +316,21 @@ def control_task(pal_car,qvl_car,control,path_queue,state,lock):
                                                                di)
             lock.release()
             #控制信号输出
+            
         #3.95  trafficlight
         #6.85  stop1
         #11.20 stop2
         #15.90 finish
+            proper_carspeed = 4.0/(20+k_total) # +5是用来抑制k_total变化过大带来的影响
 
+            car_speed = proper_carspeed
             if not stop1:
-                if state.s0 > 6.60:
+                if state.s0 > 6.20:
                     car_stop = True
                     stop1 = True
 
             if not stop2:
-                if state.s0 > 10.85:
+                if state.s0 > 10.35:
                     car_stop = True
                     stop2 = True
 
@@ -336,11 +340,12 @@ def control_task(pal_car,qvl_car,control,path_queue,state,lock):
                     car_speed = 0
                 else:
                     count = 0
-                    car_speed = global_car_speed
+                    car_speed = proper_carspeed
                     car_stop = False
 
-            if state.s0 > 15.60:
+            if state.s0 > 15.00:
                 car_speed = 0
+            print(car_speed)
             pal_car.read_write_std(car_speed, di ,control[2])
         
         #pal_car.read_write_std(control[0], control[1] ,control[2]) #使用键盘控制
@@ -432,8 +437,9 @@ def main():
     time.sleep(1)
 
     # 必须用以下方式停止，否则会出现严重bug
-    wait=input("press enter to stop")
+    wait=input("press enter to stop")   
     #QLabsRealTime().terminate_all_real_time_models()
+
     print("shutdown")
     get_state_stop=True
 
