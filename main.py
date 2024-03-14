@@ -321,7 +321,7 @@ def control_task(pal_car,qvl_car,control,path_queue,state,lock):
         #6.85  stop1
         #11.20 stop2
         #15.90 finish
-            proper_carspeed = 4.0/(20+k_total) # +5是用来抑制k_total变化过大带来的影响
+            proper_carspeed = 5.0/(20+k_total) # +5是用来抑制k_total变化过大带来的影响
 
             car_speed = proper_carspeed
             if not stop1:
@@ -335,7 +335,7 @@ def control_task(pal_car,qvl_car,control,path_queue,state,lock):
                     stop2 = True
 
             if car_stop:
-                if count < 100:
+                if count < 50:
                     count=count+1
                     car_speed = 0
                 else:

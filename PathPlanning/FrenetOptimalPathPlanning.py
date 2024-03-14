@@ -17,7 +17,7 @@ from PathPlanning.CubicSpline import cubic_spline_planner
 MAX_SPEED = 50.0 / 3.6  # maximum speed [m/s]
 MAX_ACCEL = 100.0  # maximum acceleration [m/ss]
 MAX_CURVATURE = 100.0  # maximum curvature [1/m]
-MAX_ROAD_WIDTH = 0.2 # maximum road width [m]
+MAX_ROAD_WIDTH = 0.15 # maximum road width [m]
 D_ROAD_W = 0.01  # road width sampling length [m]
 DT = 0.2  # time tick [s] 
 MAX_T = 5.0  # max prediction time [m]
