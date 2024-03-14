@@ -1,0 +1,62 @@
+import numpy as np
+from math import *
+
+ 
+S_POINT_NUM = 20
+S_LENGTH = 1.0
+L_POINT_NUM = 9
+L_LENGTH = 0.6
+
+class DP_frenet_path:
+    def __init__(self):
+        self.d = []
+        self.d_d = []
+        self.d_dd = []
+        self.d_ddd = []
+        self.s = []
+        self.s_d = []
+        self.s_dd = []
+        self.s_ddd = []
+        self.cd = 0.0  #d方向上的cost
+        self.cv = 0.0  #s方向上的cost
+        self.cf = 0.0  #按权重分配后的cost
+
+        self.x = []  #cartesian坐标系下的坐标
+        self.y = []
+        self.yaw = []
+        self.ds = []
+        self.c = []
+
+
+class DP_PATH_PLANNER:
+    def __init__(self) -> None:
+         pass
+    
+    #cartesian转frenet坐标
+    #返回 s,ds,l,dl
+    def cartesian_to_frenet2D(self,rs, rx, ry, rtheta, rkappa, x, y, v, theta):
+        s_condition = np.zeros(2)
+        d_condition = np.zeros(2)
+        
+        dx = x - rx
+        dy = y - ry
+        
+        cos_theta_r = cos(rtheta)
+        sin_theta_r = sin(rtheta)
+        
+        cross_rd_nd = cos_theta_r * dy - sin_theta_r * dx
+        d_condition[0] = copysign(sqrt(dx * dx + dy * dy), cross_rd_nd)
+        
+        delta_theta = theta - rtheta
+        tan_delta_theta = tan(delta_theta)
+        cos_delta_theta = cos(delta_theta)
+        
+        one_minus_kappa_r_d = 1 - rkappa * d_condition[0]
+        d_condition[1] = one_minus_kappa_r_d * tan_delta_theta
+        
+        
+        s_condition[0] = rs 
+        s_condition[1] = v * cos_delta_theta / one_minus_kappa_r_d
+
+        return s_condition, d_condition 
+    
