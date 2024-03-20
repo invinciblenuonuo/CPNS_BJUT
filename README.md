@@ -1,19 +1,32 @@
 # CPNS_BJUT
 
+**We use conda to manage our python package and dependency**
+
 # START 
-首先创建一个名为“qcar”的conda环境，python=3.6.9
-```python
-conda create -n qcar python=3.6.9
-```
-然后用requirement.txt安装所依赖的库
-```python
-pip install requirements.txt
-```
-之后开启qlab客户端
 
-运行`start.bat` 
+We packed our conda enviroment by google drive.
+Here is our package download link:
+```txt
+https://drive.google.com/file/d/1D3Gs8oJ7uZKtzXBy-iQokfaYVNifVziY/view?usp=drive_link
+```
+And we depend on the cuda 11.0 , we also offer the pack of it.
+```txt
+https://drive.google.com/file/d/1123nn8qEOhh7VqrFplcuIpYlubE0scRh/view?usp=drive_link
+```
+![image.png](https://obsidian-1321127127.cos.ap-beijing.myqcloud.com/20240320224007.png)
+![image.png](https://obsidian-1321127127.cos.ap-beijing.myqcloud.com/20240320224215.png)
+Then finish the setup exe.
+put the downloaded conda package into the anacondas /env folder
 
-然后运行
-```python
+Then,open the qlab and activate the enviroment 'qcar'
+```shell
+conda activate qcar
+```
+Enter the path /CPNS_BJUT
+
+Make sure the Setup_commpition is aready run
+
+Then 
+```shell
 python main.py
 ```
