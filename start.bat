@@ -5,6 +5,7 @@ pause
 call D:\ProgramData\anaconda3\Scripts\activate.bat D:\ProgramData\anaconda3
 call conda activate qcar
 cd /d D:\Documentes\postgraduate\qcar\official\CPNS_BJUT\official_code
+python Setup_Competition.py
 python Traffic_Lights_Competition.py
 pause
 

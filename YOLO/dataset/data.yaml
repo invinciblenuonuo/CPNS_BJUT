@@ -1,0 +1,7 @@
+names:
+- stopsign
+- red
+- green
+nc: 3
+train: D:\Documentes\postgraduate\qcar\official\CPNS_BJUT\YOLO\dataset\train
+val:  D:\Documentes\postgraduate\qcar\official\CPNS_BJUT\YOLO\dataset\valid

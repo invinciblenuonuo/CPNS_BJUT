@@ -33,6 +33,13 @@ from PathPlanning.FrenetOptimalPathPlanning import FrenetPathMethod
 from pathtracking.PurePursuit import pure_pursuit
 from pathtracking.StanleyController import stanley_controller
 from scipy.interpolate import splprep,splev
+from Lidar_detect.lidar_test import Lidar_detect
+import pyqtgraph as pg
+from pyqtgraph.Qt import QtWidgets
+import matplotlib
+from YOLO import detect
+
+
 
 class Qcar_State_Cartesian:
     def __init__(self):
@@ -50,7 +57,8 @@ global_car_speed=0.15
 qcar_state_cartesian = Qcar_State_Cartesian()
 #信号量
 map_sig=False  #地图保存标识
-car_stop=False #停车标识
+stopsign_stop=False #stopsign 停车标识
+trafficlight_stop=False
 get_state_stop=False#结束状态标志位
 #障碍物列表
 obs=[2.2, 0.8, 0.006]
@@ -205,7 +213,8 @@ def path_planning_task(qcar_state,path_queue,lock):
     global qcar_state_cartesian
     last_point=0
     print("planning task starting....")
-    time.sleep(1) #此处的延时是因为如果之间启动任务会导致qcar的初始位置获取错误
+
+    time.sleep(1.5) #此处的延时是因为如果之间启动任务会导致qcar的初始位置获取错误
     print("planning task start!")
     while True:
         #获取车辆的状态信息
@@ -263,50 +272,66 @@ def path_planning_task(qcar_state,path_queue,lock):
 
 
 #控制函数
-def control_task(pal_car,qvl_car,control,path_queue,state,lock):
+def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
     global get_state_stopk
     global map_sig
     global qcar_state_cartesian
-    global car_stop
-
+    global stopsign_stop
+    global trafficlight_stop
     count=0
     target_ind=0
     di=0
     last_valid_path=0
     pathsig=False
-    stop1=False
-    stop2=False
-    
-    purepursuit = pure_pursuit()
+    stage = 0
     Stanleycontrol=stanley_controller()
     print("control task start!")
     pal_car.read_write_std(0, 0 ,control[2])
     tx, ty, tyaw, tc, csp = map_process()
+    detect_result=[]
+    labels=[]
+    yolopositions=[]
+    beliefs=[]
+    time.sleep(1)
     while True:
-        
-        statue, location, rotation, scale = qvl_car.get_world_transform()
-        #获取转速到车速
         lock.acquire()
+        statue, location, rotation, scale = qvl_car.get_world_transform()
+        lock.release()
+        #获取转速到车速
+        
         for i in range(3):
             qcar_state_cartesian.location[i]=location[i]
             qcar_state_cartesian.rotation[i]=rotation[i]
             qcar_state_cartesian.acc[i]=pal_car.accelerometer[i]
             qcar_state_cartesian.gyro[i]=pal_car.gyroscope[i]
         qcar_state_cartesian.car_speed=pal_car.motorTach 
-        lock.release()    
+
         if not path_queue.empty():     
             path = path_queue.get_nowait() 
             if path!=None:
                 last_valid_path = path #如果规划失败，需要使用上一次生成的路径
             pathsig=True
+
         
+        if not detect_queue.empty():     
+            detect_result = detect_queue.get_nowait()
+
+        if len(detect_result) != 0:
+            labels,yolopositions,beliefs=[],[],[]
+            for i in range(len(detect_result)):
+                labels.append(detect_result[i][0])
+                yolopositions.append(detect_result[i][1])
+                beliefs.append(detect_result[i][2])
+        else:
+            labels,yolopositions,beliefs=[],[],[]
+
+        #print("control: label=",labels)
+
         if pathsig:
             k_total=0
             for k in last_valid_path.c:
                 k_total +=  abs(k)
-            #print(k_total)
             lock.acquire()
-            #di,target_ind = purepursuit.pure_pursuit_control(qcar_state_cartesian,last_valid_path.x,last_valid_path.y,target_ind)
             di,target_ind = Stanleycontrol.stanley_control(qcar_state_cartesian,
                                                                last_valid_path.x,
                                                                last_valid_path.y,
@@ -317,45 +342,107 @@ def control_task(pal_car,qvl_car,control,path_queue,state,lock):
             lock.release()
             #控制信号输出
             
-        #3.95  trafficlight
+        #3.65 - 3.95   trafficlight1
         #6.85  stop1
         #11.20 stop2
+        #14.0 - 14.4   trafficlight2
         #15.90 finish
+        
             proper_carspeed = 5.0/(20+k_total) # +5是用来抑制k_total变化过大带来的影响
-
             car_speed = proper_carspeed
-            if not stop1:
+
+            if stage == 0 :
+                car_speed = proper_carspeed-0.01
+                if state.s0 > 3.3 and state.s0 < 3.9:
+                    if len(labels)==0:
+                        pass
+                    else:
+                        for label in labels:
+                            if label == 1:
+                                trafficlight_stop=True
+                elif state.s0 > 4.2:
+                    stage+=1
+                    
+            elif stage == 1:
                 if state.s0 > 6.20:
-                    car_stop = True
-                    stop1 = True
-
-            if not stop2:
+                     stopsign_stop = True
+                   
+            elif stage == 2:
                 if state.s0 > 10.35:
-                    car_stop = True
-                    stop2 = True
+                    stopsign_stop = True
+           
+            elif stage == 3:
+                if state.s0 > 13.6 and state.s0 < 14.35:
+                    if len(labels)==0:
+                        pass
+                    else:
+                        for label in labels:
+                            if label == 1:
+                                trafficlight_stop=True
+                elif state.s0 > 14.4:
+                    stage+=1
 
-            if car_stop:
+            elif stage == 4:
+                if state.s0 > 15.20:
+                    car_speed = 0
+
+            if stopsign_stop:
                 if count < 50:
                     count=count+1
                     car_speed = 0
                 else:
                     count = 0
                     car_speed = proper_carspeed
-                    car_stop = False
+                    stopsign_stop = False
+                    stage+=1
 
-            if state.s0 > 15.00:
-                car_speed = 0
-            print(car_speed)
+            if trafficlight_stop:
+                car_speed=0
+                for label in labels:
+                    if label == 2:
+                        car_speed = proper_carspeed
+                        trafficlight_stop = False
+                        
+
+
+            #print(car_speed)
             pal_car.read_write_std(car_speed, di ,control[2])
         
-        #pal_car.read_write_std(control[0], control[1] ,control[2]) #使用键盘控制
+        # pal_car.read_write_std(control[0], control[1] ,control[2]) #使用键盘控制
+        # print(state.s0)
         #纵向控制不需要标定
         if get_state_stop:
             break
         time.sleep(0.01)
 
 
+def Lidar_Task(qcar,lock):
+    print("lidar task starting")
+    
+    lidardetect = Lidar_detect()
+    global get_state_stop
+    print("lidar task start!")
+    while True:
+        cluster_center,cluster_radius = lidardetect.lidar_detect(qcar,lock)
+        #print(cluster_center,cluster_radius)
+        if get_state_stop:
+            break
+        time.sleep(0.1)
+  
 
+def Detect_Task(qcar,detect_queue,lock):
+    global get_state_stop
+    yolo_detect = detect.detectapi(weights='D:/Documentes/postgraduate/qcar/official/CPNS_BJUT/YOLO/best.pt')
+    while True:
+        lock.acquire()
+        x, camera_image = qcar.get_image(camera=qcar.CAMERA_RGB)
+        lock.release()
+        result_txt, names , runtime = yolo_detect.detect(camera_image)
+        detect_queue.put(result_txt)
+        #print(result_txt, runtime)
+        if get_state_stop:
+            break
+    return
 
 class path_state:
     def __init__(self):
@@ -426,20 +513,29 @@ def main():
     qcar_path_state=path_state()
     #使用FIFO队列进行线程之间的通信
     path_queue = Queue(maxsize=10)
+    detect_queue = Queue(maxsize=10)
 
-    thread_control = Thread(target=control_task,args=(car,qcar,qcar0,path_queue,qcar_path_state,lock))
+    thread_yolo_detect = Thread(target=Detect_Task,args=(qcar,detect_queue,lock))
+    thread_yolo_detect.start()
+
+    thread_control = Thread(target=control_task,args=(car,qcar,qcar0,path_queue,qcar_path_state,detect_queue,lock))
     thread_control.start()
 
     thread_path_planning = Thread(target=path_planning_task,args=(qcar_path_state,path_queue,lock))
     thread_path_planning.start()
-   
+
+
+    thread_lidar = Thread(target=Lidar_Task,args=(qcar,lock))
+    thread_lidar.start()
+
+
     keyboard.hook(callback)
     time.sleep(1)
+
 
     # 必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")   
     #QLabsRealTime().terminate_all_real_time_models()
-
     print("shutdown")
     get_state_stop=True
 
