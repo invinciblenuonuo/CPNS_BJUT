@@ -432,7 +432,7 @@ def Lidar_Task(qcar,lock):
 
 def Detect_Task(qcar,detect_queue,lock):
     global get_state_stop
-    yolo_detect = detect.detectapi(weights='D:/Documentes/postgraduate/qcar/official/CPNS_BJUT/YOLO/best.pt')
+    yolo_detect = detect.detectapi(weights='YOLO/usr_weight/best.pt')
     while True:
         lock.acquire()
         x, camera_image = qcar.get_image(camera=qcar.CAMERA_RGB)
@@ -533,7 +533,7 @@ def main():
     time.sleep(1)
 
 
-    # 必须用以下方式停止，否则会出现严重bug
+    #必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")   
     #QLabsRealTime().terminate_all_real_time_models()
     print("shutdown")
