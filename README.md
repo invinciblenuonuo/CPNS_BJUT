@@ -7,8 +7,13 @@ conda create -n qcar python=3.6.9
 ```
 然后用requirement.txt安装所依赖的库
 ```python
-pip install requirement.txt
+pip install requirements.txt
 ```
 之后开启qlab客户端
 
 运行`start.bat` 
+
+然后运行
+```python
+python main.py
+```
