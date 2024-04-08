@@ -62,8 +62,8 @@ trafficlight_stop=False
 get_state_stop=False#结束状态标志位
 #障碍物列表
 obs=[2.2, 0.8, 0.006]
-
-
+obs2=[-1.965, 3.071,0.006]
+obs3=[-0.663, 4.269, 0.006]
 #键盘回调函数
 def callback(sign):
     if sign.event_type == 'down' and sign.name == 'k':
@@ -213,7 +213,6 @@ def path_planning_task(qcar_state,path_queue,lock):
     global qcar_state_cartesian
     last_point=0
     print("planning task starting....")
-
     time.sleep(1.5) #此处的延时是因为如果之间启动任务会导致qcar的初始位置获取错误
     print("planning task start!")
     while True:
@@ -243,9 +242,11 @@ def path_planning_task(qcar_state,path_queue,lock):
         qcar_state.c_d_dd = 0
 
         global obs
+        global obs2
         qcar_state.ob = np.array([
                                   [obs[0],obs[1]],
-                                  [30.0, 6.0]
+                                  [obs2[0], obs2[1]],
+                                  [obs3[0], obs3[1]]
         ])
 
         # 输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
@@ -257,13 +258,6 @@ def path_planning_task(qcar_state,path_queue,lock):
         if path != None:
             save_path(path)
         path_queue.put(path)
-
-        # qcar_state.s0 = path.s[1]
-        # qcar_state.c_d = path.d[1]
-        # qcar_state.c_d_d = path.d_d[1]
-        # qcar_state.c_d_dd = path.d_dd[1]
-        # qcar_state.c_speed = path.s_d[1]
-        # qcar_state.c_accel = path.s_dd[1]
 
         if get_state_stop:
             break
@@ -348,7 +342,7 @@ def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
         #14.0 - 14.4   trafficlight2
         #15.90 finish
         
-            proper_carspeed = 5.0/(20+k_total) # +5是用来抑制k_total变化过大带来的影响
+            proper_carspeed = 5.0/(20+k_total) # +20是用来抑制k_total变化过大带来的影响
             car_speed = proper_carspeed
 
             if stage == 0 :
@@ -413,7 +407,7 @@ def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
         #纵向控制不需要标定
         if get_state_stop:
             break
-        time.sleep(0.01)
+        #time.sleep(0.01)
 
 
 def Lidar_Task(qcar,lock):
@@ -439,10 +433,10 @@ def Detect_Task(qcar,detect_queue,lock):
         lock.release()
         result_txt, names , runtime = yolo_detect.detect(camera_image)
         detect_queue.put(result_txt)
-        #print(result_txt, runtime)
         if get_state_stop:
             break
     return
+
 
 class path_state:
     def __init__(self):
@@ -450,7 +444,6 @@ class path_state:
                 #[2.45 , 1.6],
                 [30.0, 6.0]
                 ])
-
         self.c_speed =0  
         self.c_accel = 0.0  
         self.c_d = 0.2 
@@ -474,14 +467,25 @@ def main():
         return
     print("Connected")
     global obs
+    global obs2
     block0=QLabsBasicShape(qlabs)
+    block1=QLabsBasicShape(qlabs)
+
     block=block0.spawn_degrees(
                           location=obs, 
                           rotation=[0, 0, 0], 
                           scale=[0.1, 0.1, 0.4], 
                           configuration=0, 
                           waitForConfirmation=True)
+    
+    block2=block1.spawn_degrees(
+                        location=obs2, 
+                        rotation=[0, 0, 0], 
+                        scale=[0.1, 0.1, 0.4], 
+                        configuration=0, 
+                        waitForConfirmation=True)
 
+    
     #pal链接官方生成的qcar
     car = QCar(            
             0,  # id=
@@ -537,6 +541,7 @@ def main():
     wait=input("press enter to stop")   
     #QLabsRealTime().terminate_all_real_time_models()
     print("shutdown")
+
     get_state_stop=True
 
 

@@ -177,7 +177,7 @@ class FrenetPathMethod:
     def calc_frenet_paths(self,c_speed, c_accel, c_d, c_d_d, c_d_dd, s0 ):
         frenet_paths = []
 
-        for di in np.arange(0.00, MAX_ROAD_WIDTH, D_ROAD_W):
+        for di in np.arange(-(MAX_ROAD_WIDTH-0.13), MAX_ROAD_WIDTH, D_ROAD_W):
 
             # 横向运动规划
             for Ti in np.arange(MIN_T, MAX_T, DT): 
@@ -267,19 +267,18 @@ class FrenetPathMethod:
                 fp.c.append( e / fp.ds[i])
 
             
+            for j in range(ob.shape[0]):
+                for i in range(len(fp.x) - 1):
+                    d_barrier.append( np.sqrt((fp.x[i] - ob[j,0])**2 + (fp.y[i] - ob[j,1])**2) )
 
-
-            for i in range(len(fp.x) - 1):
-                d_barrier.append( np.sqrt((fp.x[i] - ob[0,0])**2 + (fp.y[i] - ob[0,1])**2) )
-
-            d_barrier = np.array(d_barrier)
-            maxindex = np.argmin(d_barrier)
-            if d_barrier[maxindex] > 0.8:
-                fp.cb = 0.0
-            else:
-                fp.cb = np.sum(d_barrier)
-            fp.cf = fp.cf - K_OB*fp.cb
-                
+                d_barrier = np.array(d_barrier)
+                maxindex = np.argmin(d_barrier)
+                if d_barrier[maxindex] > 0.8:
+                    fp.cb = 0.0
+                else:
+                    fp.cb = np.sum(d_barrier)
+                fp.cf = fp.cf - K_OB*fp.cb
+                d_barrier = []
             #print('cb = ' , K_OB*fp.cb,K_LAT * fp.cd,K_LON * fp.cv)
 
             #     fp.ds.append(math.hypot(dx, dy))
