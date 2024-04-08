@@ -16,7 +16,8 @@ https://drive.google.com/file/d/1123nn8qEOhh7VqrFplcuIpYlubE0scRh/view?usp=drive
 ![image.png](https://obsidian-1321127127.cos.ap-beijing.myqcloud.com/20240320224007.png)
 ![image.png](https://obsidian-1321127127.cos.ap-beijing.myqcloud.com/20240320224215.png)
 Then finish the setup exe.
-put the downloaded conda package into the anacondas /env folder
+
+Unzip and put the downloaded conda package into the anacondas /env folder
 
 Then,open the qlab and activate the enviroment 'qcar'
 ```shell
