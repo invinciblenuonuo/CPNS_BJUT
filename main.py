@@ -62,8 +62,7 @@ trafficlight_stop=False
 get_state_stop=False#结束状态标志位
 #障碍物列表
 obs=[2.2, 0.8, 0.006]
-obs2=[-1.965, 3.071,0.006]
-obs3=[-0.663, 4.269, 0.006]
+obs2=[-2.05, 3.071,0.006]
 #键盘回调函数
 def callback(sign):
     if sign.event_type == 'down' and sign.name == 'k':
@@ -245,8 +244,7 @@ def path_planning_task(qcar_state,path_queue,lock):
         global obs2
         qcar_state.ob = np.array([
                                   [obs[0],obs[1]],
-                                  [obs2[0], obs2[1]],
-                                  [obs3[0], obs3[1]]
+                                  #[obs2[0], obs2[1]]
         ])
 
         # 输入当前qcar在frenet坐标系下的 s,s_d,s_dd,以及 d,d_d,d_dd 
@@ -342,11 +340,11 @@ def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
         #14.0 - 14.4   trafficlight2
         #15.90 finish
         
-            proper_carspeed = 5.0/(20+k_total) # +20是用来抑制k_total变化过大带来的影响
+            proper_carspeed = 5.2/(20+k_total) # +20是用来抑制k_total变化过大带来的影响
             car_speed = proper_carspeed
 
             if stage == 0 :
-                car_speed = proper_carspeed-0.01
+                car_speed = proper_carspeed-0.02
                 if state.s0 > 3.3 and state.s0 < 3.9:
                     if len(labels)==0:
                         pass
@@ -366,7 +364,7 @@ def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
                     stopsign_stop = True
            
             elif stage == 3:
-                if state.s0 > 13.6 and state.s0 < 14.35:
+                if state.s0 > 13.5 and state.s0 < 14.35:
                     if len(labels)==0:
                         pass
                     else:
@@ -478,12 +476,12 @@ def main():
                           configuration=0, 
                           waitForConfirmation=True)
     
-    block2=block1.spawn_degrees(
-                        location=obs2, 
-                        rotation=[0, 0, 0], 
-                        scale=[0.1, 0.1, 0.4], 
-                        configuration=0, 
-                        waitForConfirmation=True)
+    # block2=block1.spawn_degrees(
+    #                     location=obs2, 
+    #                     rotation=[0, 0, 0], 
+    #                     scale=[0.1, 0.1, 0.4], 
+    #                     configuration=0, 
+    #                     waitForConfirmation=True)
 
     
     #pal链接官方生成的qcar

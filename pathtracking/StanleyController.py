@@ -7,7 +7,7 @@ class stanley_controller:
         self.L = 0.256  # [m] Wheel base of vehicle
         self.max_steer = 0.6  # [rad] max steering angle
         self.ksoft = 1.0
-        self.delta = 0.4
+        self.delta = 0.45
         self.kdelta = 0.18
         self.offset=0
         self.angleoffset=0.01
