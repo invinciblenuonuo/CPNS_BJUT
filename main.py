@@ -61,8 +61,11 @@ stopsign_stop=False #stopsign 停车标识
 trafficlight_stop=False
 get_state_stop=False#结束状态标志位
 #障碍物列表
-obs=[2.2, 0.8, 0.006]
+#obs=[2.2, 0.8, 0.006]
+obs=[20.2, 20.8, 20.006]
 obs2=[-2.05, 3.071,0.006]
+
+
 #键盘回调函数
 def callback(sign):
     if sign.event_type == 'down' and sign.name == 'k':
@@ -339,8 +342,15 @@ def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
         #11.20 stop2
         #14.0 - 14.4   trafficlight2
         #15.90 finish
-        
-            proper_carspeed = 5.2/(20+k_total) # +20是用来抑制k_total变化过大带来的影响
+            #5.5
+            #3.3 3.9
+            #4.2
+            #6.2
+            #10.35
+            #13.5 14.35
+            #14.4
+            #15.2
+            proper_carspeed = 10.0/(20+k_total) # +20是用来抑制k_total变化过大带来的影响
             car_speed = proper_carspeed
 
             if stage == 0 :
@@ -356,11 +366,11 @@ def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
                     stage+=1
                     
             elif stage == 1:
-                if state.s0 > 6.20:
+                if state.s0 > 5.70:
                      stopsign_stop = True
                    
             elif stage == 2:
-                if state.s0 > 10.35:
+                if state.s0 > 9.9:
                     stopsign_stop = True
            
             elif stage == 3:
@@ -375,11 +385,11 @@ def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
                     stage+=1
 
             elif stage == 4:
-                if state.s0 > 15.20:
+                if state.s0 > 14.80:
                     car_speed = 0
 
             if stopsign_stop:
-                if count < 50:
+                if count < 30:
                     count=count+1
                     car_speed = 0
                 else:
@@ -400,12 +410,12 @@ def control_task(pal_car,qvl_car,control,path_queue,state,detect_queue,lock):
             #print(car_speed)
             pal_car.read_write_std(car_speed, di ,control[2])
         
-        # pal_car.read_write_std(control[0], control[1] ,control[2]) #使用键盘控制
-        # print(state.s0)
+        #pal_car.read_write_std(control[0], control[1] ,control[2]) #使用键盘控制
+        #print(state.s0)
         #纵向控制不需要标定
         if get_state_stop:
             break
-        #time.sleep(0.01)
+        time.sleep(0.0005)
 
 
 def Lidar_Task(qcar,lock):
@@ -469,12 +479,12 @@ def main():
     block0=QLabsBasicShape(qlabs)
     block1=QLabsBasicShape(qlabs)
 
-    block=block0.spawn_degrees(
-                          location=obs, 
-                          rotation=[0, 0, 0], 
-                          scale=[0.1, 0.1, 0.4], 
-                          configuration=0, 
-                          waitForConfirmation=True)
+    # block=block0.spawn_degrees(
+    #                       location=obs, 
+    #                       rotation=[0, 0, 0], 
+    #                       scale=[0.1, 0.1, 0.4], 
+    #                       configuration=0, 
+    #                       waitForConfirmation=True)
     
     # block2=block1.spawn_degrees(
     #                     location=obs2, 
@@ -527,8 +537,8 @@ def main():
     thread_path_planning.start()
 
 
-    thread_lidar = Thread(target=Lidar_Task,args=(qcar,lock))
-    thread_lidar.start()
+    # thread_lidar = Thread(target=Lidar_Task,args=(qcar,lock))
+    # thread_lidar.start()
 
 
     keyboard.hook(callback)
@@ -538,6 +548,7 @@ def main():
     #必须用以下方式停止，否则会出现严重bug
     wait=input("press enter to stop")   
     #QLabsRealTime().terminate_all_real_time_models()
+
     print("shutdown")
 
     get_state_stop=True
