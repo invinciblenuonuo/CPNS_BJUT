@@ -1,10 +1,12 @@
 # CPNS_BJUT
 
-**We use conda to manage our python package and dependency**
-
+**Thanks for visiting this page**
+**We are the team from Beijing university of technology**
+**Our video link ：[Video](https://youtu.be/F-fDmX3_VL0)**
 # START 
 
-We packed our conda enviroment by google drive.
+We use conda to manage our python package and dependency.
+And we packed our conda enviroment by google drive.
 Here is our package download link:
 ```txt
 https://drive.google.com/file/d/1D3Gs8oJ7uZKtzXBy-iQokfaYVNifVziY/view?usp=drive_link
